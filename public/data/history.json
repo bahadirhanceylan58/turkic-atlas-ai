@@ -4,21 +4,303 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Gokturk Khaganate",
-        "startYear": 552,
-        "endYear": 744,
-        "description": "Orta Asya'nın en büyük Türk imparatorluğu.",
-        "type": "state"
+        "name": "Scythians (Saka)",
+        "startYear": -800,
+        "endYear": -200,
+        "description": "Avrasya bozkırlarında hüküm süren göçebe atlı savaşçılar.",
+        "type": "state",
+        "color": "#8D6E63"
       },
       "geometry": {
         "type": "Polygon",
         "coordinates": [
           [
-            [60.0, 45.0],
-            [120.0, 45.0],
-            [120.0, 35.0],
-            [60.0, 35.0],
-            [60.0, 45.0]
+            [
+              30.0,
+              50.0
+            ],
+            [
+              70.0,
+              50.0
+            ],
+            [
+              80.0,
+              45.0
+            ],
+            [
+              70.0,
+              40.0
+            ],
+            [
+              50.0,
+              35.0
+            ],
+            [
+              30.0,
+              40.0
+            ],
+            [
+              30.0,
+              50.0
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Xiongnu (Asian Huns)",
+        "startYear": -209,
+        "endYear": 93,
+        "description": "Orta Asya'da kurulan ilk büyük Türk devleti.",
+        "type": "state",
+        "color": "#D32F2F"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.0,
+              55.0
+            ],
+            [
+              120.0,
+              55.0
+            ],
+            [
+              125.0,
+              40.0
+            ],
+            [
+              100.0,
+              35.0
+            ],
+            [
+              80.0,
+              40.0
+            ],
+            [
+              80.0,
+              55.0
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Gokturk Khaganate",
+        "startYear": 552,
+        "endYear": 744,
+        "description": "Orta Asya'nın en büyük Türk imparatorluğu.",
+        "type": "state",
+        "color": "#627BC1"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              60.0,
+              50.0
+            ],
+            [
+              120.0,
+              50.0
+            ],
+            [
+              120.0,
+              35.0
+            ],
+            [
+              60.0,
+              35.0
+            ],
+            [
+              60.0,
+              50.0
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Oghuz Migration",
+        "startYear": 800,
+        "endYear": 1100,
+        "description": "Orta Asya'dan Anadolu'ya uzanan büyük Türk göçü.",
+        "type": "migration",
+        "color": "#FF9800"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            75.0,
+            45.0
+          ],
+          [
+            65.0,
+            42.0
+          ],
+          [
+            60.0,
+            40.0
+          ],
+          [
+            55.0,
+            38.0
+          ],
+          [
+            50.0,
+            36.0
+          ],
+          [
+            45.0,
+            38.0
+          ],
+          [
+            40.0,
+            39.0
+          ],
+          [
+            35.0,
+            39.0
+          ],
+          [
+            30.0,
+            40.0
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Great Seljuk Empire",
+        "startYear": 1037,
+        "endYear": 1194,
+        "description": "İran, Anadolu ve Orta Doğu'ya hükmeden Türk imparatorluğu.",
+        "type": "state",
+        "color": "#1976D2"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              26.0,
+              42.0
+            ],
+            [
+              65.0,
+              45.0
+            ],
+            [
+              70.0,
+              35.0
+            ],
+            [
+              60.0,
+              25.0
+            ],
+            [
+              35.0,
+              30.0
+            ],
+            [
+              26.0,
+              42.0
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Ottoman Empire",
+        "startYear": 1299,
+        "endYear": 1922,
+        "description": "Üç kıtaya yayılan cihan imparatorluğu.",
+        "type": "state",
+        "color": "#388E3C"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              15.0,
+              48.0
+            ],
+            [
+              40.0,
+              45.0
+            ],
+            [
+              50.0,
+              30.0
+            ],
+            [
+              40.0,
+              15.0
+            ],
+            [
+              30.0,
+              30.0
+            ],
+            [
+              10.0,
+              35.0
+            ],
+            [
+              15.0,
+              48.0
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Republic of Turkey",
+        "startYear": 1923,
+        "endYear": 2099,
+        "description": "Modern Türk devleti.",
+        "type": "state",
+        "color": "#E53935"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              26.0,
+              42.0
+            ],
+            [
+              44.0,
+              42.0
+            ],
+            [
+              44.0,
+              36.0
+            ],
+            [
+              26.0,
+              36.0
+            ],
+            [
+              26.0,
+              42.0
+            ]
           ]
         ]
       }

@@ -1,16 +1,17 @@
 "use client";
+// forcing rebuild
 
 import React, { useMemo } from 'react';
-import Map, { Source, Layer, FillLayer, LineLayer } from 'react-map-gl';
-import type { FeatureCollection } from 'geojson';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import Map, { Source, Layer } from 'react-map-gl/mapbox';
+// import type { FeatureCollection } from 'geojson';
+// import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface MapBlockProps {
   selectedYear: number;
   onStateClick: (stateName: string) => void;
 }
 
-const MapBlock: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) => {
+const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) => {
   // Access token from environment variable
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -20,8 +21,8 @@ const MapBlock: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) => {
   // For simplicity, we'll fetch it or import it. unique for now, fetch in useEffect or useSWR is better, 
   // but for MVP we can just import if it's small, or fetch.
   // Let's use simple fetch for now.
-  
-  const [geoData, setGeoData] = React.useState<FeatureCollection | null>(null);
+
+  const [geoData, setGeoData] = React.useState<any | null>(null);
 
   React.useEffect(() => {
     fetch('/data/history.json')
@@ -29,24 +30,45 @@ const MapBlock: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) => {
       .then(data => setGeoData(data));
   }, []);
 
-  const filter = useMemo(() => {
+  // Create specific filters for each layer type to avoid complex nesting issues
+  const stateFilter = useMemo(() => {
     return [
       'all',
       ['<=', 'startYear', selectedYear],
-      ['>=', 'endYear', selectedYear]
+      ['>=', 'endYear', selectedYear],
+      ['==', 'type', 'state']
     ];
   }, [selectedYear]);
 
-  const fillLayer: FillLayer = {
+  const migrationFilter = useMemo(() => {
+    return [
+      'all',
+      ['<=', 'startYear', selectedYear],
+      ['>=', 'endYear', selectedYear],
+      ['==', 'type', 'migration']
+    ];
+  }, [selectedYear]);
+
+  const fillLayer = {
     id: 'states-fill',
     type: 'fill',
     paint: {
-      'fill-color': '#627BC1',
+      'fill-color': ['get', 'color'],
       'fill-opacity': 0.5
     }
   };
 
-  const lineLayer: LineLayer = {
+  const migrationLayer = {
+    id: 'migration-layer',
+    type: 'line',
+    paint: {
+      'line-color': '#FF9800',
+      'line-width': 3,
+      'line-dasharray': [2, 1]
+    }
+  };
+
+  const lineLayer = {
     id: 'states-outline',
     type: 'line',
     paint: {
@@ -83,9 +105,11 @@ const MapBlock: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) => {
         {geoData && (
           <Source id="history-data" type="geojson" data={geoData}>
             {/* @ts-ignore */}
-            <Layer {...fillLayer} filter={filter} />
+            <Layer {...fillLayer} filter={stateFilter} />
             {/* @ts-ignore */}
-            <Layer {...lineLayer} filter={filter} />
+            <Layer {...lineLayer} filter={stateFilter} />
+            {/* @ts-ignore */}
+            <Layer {...migrationLayer} filter={migrationFilter} />
           </Source>
         )}
       </Map>
@@ -93,4 +117,4 @@ const MapBlock: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) => {
   );
 };
 
-export default MapBlock;
+export default MapComponent;

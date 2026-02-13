@@ -7,7 +7,7 @@ import { Bot, ChevronRight, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Dynamically import MapBlock to avoid SSR issues with Mapbox
-const MapBlock = dynamic(() => import('@/components/MapBlock'), { ssr: false });
+const MapBlock = dynamic(() => import('@/components/MapComponent'), { ssr: false });
 
 export default function Home() {
   const [selectedYear, setSelectedYear] = useState(2026);
@@ -18,6 +18,7 @@ export default function Home() {
 
   // Timeline marks
   const timelineMarks = [
+    { year: -209, label: 'M.Ö. 209' },
     { year: 552, label: '552' },
     { year: 1071, label: '1071' },
     { year: 1453, label: '1453' },
@@ -108,31 +109,50 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Timeline Control Panel */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl z-40">
+      {/* Timeline Control Panel */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl z-40">
         <div className="flex flex-col items-center">
-          <div className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600 mb-2 drop-shadow-glow">
-            {selectedYear}
+          <div className="flex items-baseline gap-2 mb-1">
+            <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600 drop-shadow-glow">
+              {selectedYear < 0 ? `M.Ö. ${Math.abs(selectedYear)}` : selectedYear}
+            </span>
+            <span className="text-[10px] text-slate-400 tracking-widest uppercase">Seçili Dönem</span>
           </div>
-          <div className="text-xs text-slate-400 tracking-widest uppercase mb-4">Selected Period</div>
 
-          <div className="w-full relative px-4">
+          <div className="w-full relative h-10 px-2 mt-1">
+            {/* Slider */}
             <input
               type="range"
-              min="500"
+              min="-1000"
               max="2026"
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500 hover:accent-cyan-400 transition-all"
+              className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500 hover:accent-cyan-400 transition-all z-20 relative"
             />
-            <div className="flex justify-between mt-2 px-1">
-              {timelineMarks.map((mark) => (
-                <div key={mark.year} className="flex flex-col items-center cursor-pointer group" onClick={() => setSelectedYear(mark.year)}>
-                  <div className={`w-1 h-2 mb-1 ${Math.abs(selectedYear - mark.year) < 50 ? 'bg-cyan-400' : 'bg-slate-600'}`} />
-                  <span className={`text-xs ${Math.abs(selectedYear - mark.year) < 50 ? 'text-cyan-400 font-bold' : 'text-slate-600 group-hover:text-slate-400'}`}>
-                    {mark.label}
-                  </span>
-                </div>
-              ))}
+
+            {/* Marks - Using absolute positioning for correct alignment */}
+            <div className="absolute top-4 left-2 right-2 h-4 pointer-events-none">
+              {timelineMarks.map((mark) => {
+                // Calculate percentage based on min -1000 and max 2026
+                const min = -1000;
+                const max = 2026;
+                const range = max - min;
+                const percent = ((mark.year - min) / range) * 100;
+
+                return (
+                  <div
+                    key={mark.year}
+                    className="absolute flex flex-col items-center top-0 transform -translate-x-1/2 cursor-pointer pointer-events-auto"
+                    style={{ left: `${percent}%` }}
+                    onClick={() => setSelectedYear(mark.year)}
+                  >
+                    <div className={`w-0.5 h-1.5 mb-1 ${Math.abs(selectedYear - mark.year) < 100 ? 'bg-cyan-400' : 'bg-slate-600'}`} />
+                    <span className={`text-[10px] whitespace-nowrap ${Math.abs(selectedYear - mark.year) < 100 ? 'text-cyan-400 font-bold' : 'text-slate-600 hover:text-slate-400'}`}>
+                      {mark.label}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
