@@ -3,6 +3,8 @@
 
 import React, { useMemo } from 'react';
 import Map, { Source, Layer } from 'react-map-gl/mapbox';
+import { Layers, Plus, Minus, Check, Globe, Map as MapIcon, Moon } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 // import type { FeatureCollection } from 'geojson';
 // import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -12,6 +14,13 @@ interface MapBlockProps {
 }
 
 const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) => {
+  const mapRef = React.useRef<any>(null);
+
+  // Expose flyTo capability or handle it internally when prop changes? 
+  // For now, let's handle click centering internally if possible, or simple "flyTo" on click.
+  // Actually, the user wants "click on Sivas -> center on Sivas".
+  // The onMapClick handles the interaction. We can flyTo there.
+
   // Access token from environment variable
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -29,6 +38,26 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
       .then(res => res.json())
       .then(data => setGeoData(data));
   }, []);
+
+  // Map Style State
+  const [mapStyle, setMapStyle] = React.useState<'dark' | 'physical' | 'political'>('dark');
+  const [isStyleMenuOpen, setIsStyleMenuOpen] = React.useState(false);
+
+  const mapStyleUrl = useMemo(() => {
+    switch (mapStyle) {
+      case 'physical': return 'mapbox://styles/mapbox/satellite-streets-v12';
+      case 'political': return 'mapbox://styles/mapbox/light-v10';
+      case 'dark': default: return 'mapbox://styles/mapbox/dark-v11';
+    }
+  }, [mapStyle]);
+
+  const handleZoomIn = () => {
+    mapRef.current?.zoomIn({ duration: 500 });
+  };
+
+  const handleZoomOut = () => {
+    mapRef.current?.zoomOut({ duration: 500 });
+  };
 
   // Pre-process data to handle dynamic labeling based on etymology_chain and transition state
   const processedData = useMemo(() => {
@@ -56,7 +85,12 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
       // Calculate Visibility for Smooth Transitions
       // We set a property 'is_active' to 1 or 0, and use a transition on opacity in the layer style.
       // This avoids the abrupt removal of the feature from the source.
-      const isActive = selectedYear >= feature.properties.startYear && selectedYear <= feature.properties.endYear;
+      let isActive = selectedYear >= feature.properties.startYear && selectedYear <= feature.properties.endYear;
+
+      // Special case: Hide 'Republic of Turkey' general polygon when we have detailed provinces (>= 1923)
+      if (feature.properties.name === 'Republic of Turkey' && selectedYear >= 1923) {
+        isActive = false;
+      }
 
       return {
         ...feature,
@@ -183,7 +217,14 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
   const onMapClick = (event: any) => {
     const feature = event.features?.[0];
     if (feature) {
-      onStateClick(feature.properties.name); // Keep using the main ID name for API calls
+      // Fly to the clicked feature
+      mapRef.current?.flyTo({
+        center: event.lngLat,
+        zoom: 7,
+        duration: 1000
+      });
+
+      onStateClick(feature.properties.name);
     }
   };
 
@@ -194,15 +235,23 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
   return (
     <div className="w-full h-full absolute top-0 left-0">
       <Map
+        ref={mapRef}
         initialViewState={{
           longitude: 35,
           latitude: 39,
           zoom: 5
         }}
         style={{ width: '100%', height: '100%' }}
-        mapStyle="mapbox://styles/mapbox/dark-v11"
+        mapStyle={mapStyleUrl}
         mapboxAccessToken={mapboxToken}
-        interactiveLayerIds={['states-fill', 'cities-point', 'cities-label']}
+        interactiveLayerIds={[
+          'states-fill',
+          'cities-point',
+          'cities-label',
+          'provinces-fill',
+          'districts-fill-click',
+          'sivas-villages-point'
+        ]}
         onClick={onMapClick}
       >
         {processedData && (
@@ -219,8 +268,191 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
             <Layer {...cityLabelLayer} filter={cityTypeFilter} />
           </Source>
         )}
+
+        {/* Administrative Layers (Provinces & Districts) - Only for Modern Era (>= 1923) */}
+        {selectedYear >= 1923 && (
+          <>
+            <Source id="provinces-data" type="geojson" data="/data/turkey-provinces.json">
+              <Layer
+                id="provinces-fill"
+                type="fill"
+                paint={{
+                  'fill-color': '#E53935',
+                  'fill-opacity': 0, // Explicitly 0 to prevent occlusion
+                }}
+              />
+              <Layer
+                id="provinces-outline"
+                type="line"
+                paint={{
+                  'line-color': '#FFFFFF',
+                  'line-width': 0.5,
+                  'line-opacity': 0.8 // Increased visibility
+                }}
+              />
+              {/* Province Labels */}
+              <Layer
+                id="provinces-label"
+                type="symbol"
+                layout={{
+                  'text-field': ['get', 'name'],
+                  'text-size': 10,
+                  'text-transform': 'uppercase',
+                  'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                  'text-offset': [0, 0]
+                }}
+                paint={{
+                  'text-color': '#ffffff',
+                  'text-opacity': 0.6,
+                  'text-halo-color': '#000000',
+                  'text-halo-width': 1
+                }}
+                minzoom={5}
+                maxzoom={8}
+              />
+            </Source>
+
+            <Source id="districts-data" type="geojson" data="/data/turkey-districts.json">
+              {/* Transparent fill to capture clicks */}
+              <Layer
+                id="districts-fill-click"
+                type="fill"
+                paint={{
+                  'fill-color': '#000000',
+                  'fill-opacity': 0
+                }}
+                minzoom={6}
+              />
+              <Layer
+                id="districts-outline"
+                type="line"
+                paint={{
+                  'line-color': '#FFFFFF', // White as requested
+                  'line-width': 0.5, // Thinner for elegance
+                  'line-opacity': 0.5 // Subtle
+                }}
+                minzoom={6}
+              />
+              <Layer
+                id="districts-label"
+                type="symbol"
+                layout={{
+                  'text-field': ['get', 'name'],
+                  'text-size': 9,
+                  'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular']
+                }}
+                paint={{
+                  'text-color': '#B3E5FC',
+                  'text-opacity': 0.7
+                }}
+                minzoom={8}
+              />
+            </Source>
+
+            {/* Sivas Villages Layer */}
+            <Source id="sivas-villages-data" type="geojson" data="/data/sivas-villages.json">
+              <Layer
+                id="sivas-villages-point"
+                type="circle"
+                paint={{
+                  'circle-radius': 6, // Larger for easier clicking
+                  'circle-color': '#FDD835',
+                  'circle-stroke-width': 2,
+                  'circle-stroke-color': '#000'
+                }}
+                minzoom={8} // Lower minzoom to see them sooner
+              />
+              <Layer
+                id="sivas-villages-label"
+                type="symbol"
+                layout={{
+                  'text-field': ['get', 'name'],
+                  'text-size': 11,
+                  'text-offset': [0, 1.2],
+                  'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold']
+                }}
+                paint={{
+                  'text-color': '#FFF59D',
+                  'text-halo-color': '#000000',
+                  'text-halo-width': 1.5
+                }}
+                minzoom={8}
+              />
+            </Source>
+          </>
+        )}
       </Map>
-    </div>
+
+      {/* Map Controls (Bottom-Left) */}
+      <div className="absolute bottom-24 left-6 flex flex-col gap-2 z-50">
+
+        {/* Zoom Controls */}
+        <div className="flex flex-col bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-lg overflow-hidden shadow-lg">
+          <button
+            onClick={handleZoomIn}
+            className="p-2 text-slate-300 hover:text-cyan-400 hover:bg-slate-800 transition-colors border-b border-slate-700/50"
+          >
+            <Plus size={20} />
+          </button>
+          <button
+            onClick={handleZoomOut}
+            className="p-2 text-slate-300 hover:text-cyan-400 hover:bg-slate-800 transition-colors"
+          >
+            <Minus size={20} />
+          </button>
+        </div>
+
+        {/* Style Switcher */}
+        <div className="relative">
+          <button
+            onClick={() => setIsStyleMenuOpen(!isStyleMenuOpen)}
+            className={`p-2.5 rounded-lg bg-slate-900/80 backdrop-blur-md border transition-all shadow-lg flex items-center justify-center ${isStyleMenuOpen ? 'border-cyan-500 text-cyan-400' : 'border-slate-700/50 text-slate-300 hover:text-white hover:border-slate-500'}`}
+          >
+            <Layers size={20} />
+          </button>
+
+          <AnimatePresence>
+            {isStyleMenuOpen && (
+              <motion.div
+                initial={{ opacity: 0, x: -10, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -10, scale: 0.95 }}
+                className="absolute left-14 bottom-0 bg-slate-900/95 backdrop-blur-xl border border-slate-700 p-2 rounded-xl shadow-2xl w-48 flex flex-col gap-1"
+              >
+                <div className="text-[10px] uppercase text-slate-500 font-bold px-2 py-1 tracking-wider">Harita Katmanı</div>
+
+                <button
+                  onClick={() => { setMapStyle('dark'); setIsStyleMenuOpen(false); }}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${mapStyle === 'dark' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-300 hover:bg-slate-800'}`}
+                >
+                  <Moon size={16} />
+                  <span>Koyu (Varsayılan)</span>
+                  {mapStyle === 'dark' && <Check size={14} className="ml-auto" />}
+                </button>
+
+                <button
+                  onClick={() => { setMapStyle('political'); setIsStyleMenuOpen(false); }}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${mapStyle === 'political' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-300 hover:bg-slate-800'}`}
+                >
+                  <MapIcon size={16} />
+                  <span>Siyasi (Açık)</span>
+                  {mapStyle === 'political' && <Check size={14} className="ml-auto" />}
+                </button>
+
+                <button
+                  onClick={() => { setMapStyle('physical'); setIsStyleMenuOpen(false); }}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${mapStyle === 'physical' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-300 hover:bg-slate-800'}`}
+                >
+                  <Globe size={16} />
+                  <span>Fiziki (Uydu)</span>
+                  {mapStyle === 'physical' && <Check size={14} className="ml-auto" />}
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </div >
   );
 };
 

@@ -1,0 +1,155 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Hafik",
+                "type": "district_center",
+                "description": "Sivas'ın ilçesi."
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    37.3833,
+                    39.8500
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Zara",
+                "type": "district_center",
+                "description": "Sivas'ın ilçesi."
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    37.7500,
+                    39.9000
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Kangal",
+                "type": "district_center",
+                "description": "Sivas'ın ilçesi."
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    37.3833,
+                    39.2333
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Divriği",
+                "type": "district_center",
+                "description": "Ulu Camii ile ünlü ilçe."
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    38.1167,
+                    39.3667
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Gürün",
+                "type": "district_center",
+                "description": "Sivas'ın güney ilçesi."
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    37.2667,
+                    38.7167
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Şarkışla",
+                "type": "district_center",
+                "description": "Aşık Veysel'in memleketi."
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    36.4167,
+                    39.3500
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Yıldızeli",
+                "type": "district_center",
+                "description": "Tokat yolunda ilçe."
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    36.5833,
+                    39.8667
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Sivrialan",
+                "type": "village",
+                "description": "Aşık Veysel'in köyü (Şarkışla)."
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    36.4500,
+                    39.4000
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Beyyurdu",
+                "type": "village",
+                "description": "Zara'ya bağlı büyük bir köy."
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    37.8000,
+                    39.9500
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Çetinkaya",
+                "type": "village",
+                "description": "Kangal'a bağlı önemli bir demiryolu kavşağı."
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    37.6000,
+                    39.2500
+                ]
+            }
+        }
+    ]
+}

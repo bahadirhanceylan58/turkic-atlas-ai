@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { generateHistoryAnalysis } from '@/lib/aiService';
-import { Bot, ChevronRight, X } from 'lucide-react';
+import { generateHistoryAnalysis, getPlaceNameHistory, PlaceNameEntry } from '@/lib/aiService';
+import { Bot, ChevronRight, X, Search, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AuthModal from '@/components/AuthModal';
 
@@ -21,12 +21,52 @@ export default function Home() {
   const [historyData, setHistoryData] = useState<any>(null); // To store loaded history.json
   const [selectedFeatureData, setSelectedFeatureData] = useState<any>(null);
 
+  // Place Name History State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [placeHistory, setPlaceHistory] = useState<PlaceNameEntry[]>([]);
+  const [currentPlaceName, setCurrentPlaceName] = useState<PlaceNameEntry | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+
   useEffect(() => {
     // Load history data for lookup
     fetch('/data/history.json')
       .then(res => res.json())
       .then(data => setHistoryData(data));
   }, []);
+
+  // Update current place name based on timeline
+  useEffect(() => {
+    if (placeHistory.length > 0) {
+      const entry = placeHistory.find(p => selectedYear >= p.startYear && selectedYear <= p.endYear);
+      if (entry) {
+        setCurrentPlaceName(entry);
+      } else {
+        // Fallback to closest or original if out of range
+        setCurrentPlaceName(null);
+      }
+    }
+  }, [selectedYear, placeHistory]);
+
+  const handleCitySearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    setAiPanelOpen(false); // Close other panel to focus on result
+    try {
+      const history = await getPlaceNameHistory(searchQuery);
+      setPlaceHistory(history);
+      if (history.length > 0) {
+        // Set initial view to matched year
+        const entry = history.find(p => selectedYear >= p.startYear && selectedYear <= p.endYear);
+        setCurrentPlaceName(entry || history[0]);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   // Timeline marks
   const timelineMarks = [
@@ -38,12 +78,25 @@ export default function Home() {
     { year: 2026, label: '2026' },
   ];
 
+  // Ref for typing interval
+  const typingIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+    };
+  }, []);
+
   const handleStateClick = async (stateName: string) => {
     setSelectedState(stateName);
     setAiPanelOpen(true);
     setAiAnalysis('');
     setIsAnalyzing(true);
     setActiveTab('analysis'); // Reset to analysis tab
+
+    // Clear any existing typing interval
+    if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
 
     // Find feature data
     if (historyData) {
@@ -57,11 +110,14 @@ export default function Home() {
 
       // Typewriter effect
       let i = 0;
-      const typeWriter = setInterval(() => {
+      // Faster typing (10ms) and safer interval handling
+      typingIntervalRef.current = setInterval(() => {
         setAiAnalysis((prev) => analysis.substring(0, i));
-        i++;
-        if (i > analysis.length) clearInterval(typeWriter);
-      }, 30);
+        i += 2; // Type 2 chars at a time for speed
+        if (i > analysis.length) {
+          if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+        }
+      }, 10);
     } catch (error) {
       console.error(error);
       setIsAnalyzing(false);
@@ -86,6 +142,64 @@ export default function Home() {
           <span className="text-[10px] text-slate-400 tracking-[0.2em] uppercase">AI Powered History</span>
         </div>
       </motion.div>
+
+      {/* City Search Bar - Top Center */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-md">
+        <form onSubmit={handleCitySearch} className="relative group">
+          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+            <Search className={`w-4 h-4 ${isSearching ? 'text-cyan-400 animate-pulse' : 'text-slate-400'}`} />
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Şehir veya bölge adı yazın (Örn: Sivas)..."
+            className="w-full bg-slate-900/80 backdrop-blur-md border border-slate-700 text-white text-sm rounded-full py-2.5 pl-10 pr-4 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all placeholder:text-slate-500 shadow-lg"
+          />
+          {placeHistory.length > 0 && (
+            <div className="absolute top-1 right-12 text-[10px] bg-slate-800 px-2 py-1.5 rounded-full text-cyan-400 border border-slate-700">
+              {placeHistory.length} Dönem
+            </div>
+          )}
+        </form>
+      </div>
+
+      {/* Dynamic Place Name Card */}
+      <AnimatePresence>
+        {currentPlaceName && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-24 left-6 z-30 bg-slate-900/90 backdrop-blur-md border border-cyan-500/30 p-4 rounded-xl shadow-2xl max-w-sm w-full text-center"
+          >
+            <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-1">
+              {searchQuery.toUpperCase()} TARİHÇESİ
+            </div>
+            <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-white mb-1 font-serif">
+              {currentPlaceName.name}
+            </h2>
+            <div className="flex items-center justify-center gap-2 text-sm text-slate-300 mb-3">
+              <span className="bg-slate-800 px-2 py-0.5 rounded text-xs border border-slate-700">
+                {currentPlaceName.language}
+              </span>
+              <span>•</span>
+              <span className="italic">"{currentPlaceName.meaning}"</span>
+            </div>
+
+            <div className="text-xs text-slate-400 border-t border-slate-700/50 pt-2 leading-relaxed">
+              {currentPlaceName.notes}
+            </div>
+
+            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 px-3 py-0.5 rounded-full text-[10px] text-cyan-500 font-mono whitespace-nowrap">
+              {currentPlaceName.startYear} — {currentPlaceName.endYear}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Name Evolution Timeline (Subway Line) */}
+
 
       {/* Login Button Overlay */}
       <div className="absolute top-6 right-6 z-40">
@@ -263,6 +377,33 @@ export default function Home() {
                     <span className={`text-[10px] whitespace-nowrap ${Math.abs(selectedYear - mark.year) < 100 ? 'text-cyan-400 font-bold' : 'text-slate-600 hover:text-slate-400'}`}>
                       {mark.label}
                     </span>
+                  </div>
+                );
+              })}
+
+              {/* Dynamic History Markers */}
+              {placeHistory.map((entry, idx) => {
+                const min = -1000;
+                const max = 2026;
+                const range = max - min;
+                // Clamp percentage between 0 and 100
+                const percent = Math.max(0, Math.min(100, ((entry.startYear - min) / range) * 100));
+                const isActive = selectedYear >= entry.startYear && selectedYear <= entry.endYear;
+
+                return (
+                  <div
+                    key={`history-${idx}`}
+                    className="absolute top-[-12px] transform -translate-x-1/2 cursor-pointer group z-30"
+                    style={{ left: `${percent}%` }}
+                    onClick={() => setSelectedYear(entry.startYear)}
+                  >
+                    {/* Marker Dot */}
+                    <div className={`w-2 h-2 rounded-full border border-slate-900 transition-all ${isActive ? 'bg-cyan-400 scale-150 shadow-[0_0_8px_rgba(34,211,238,0.8)]' : 'bg-slate-500 hover:bg-cyan-300'}`} />
+
+                    {/* Tooltip on Hover */}
+                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-slate-600">
+                      {entry.name} ({entry.startYear})
+                    </div>
                   </div>
                 );
               })}
