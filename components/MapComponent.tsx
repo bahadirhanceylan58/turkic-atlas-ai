@@ -568,7 +568,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         {/* Supabase Markers */}
         {/* Places Source & Layers (GeoJSON) */}
         {placesGeoJSON && (
-          <Source id="places-source" type="geojson" data={placesGeoJSON}>
+          <Source id="places-source" type="geojson" data={placesGeoJSON as any}>
             {/* @ts-ignore */}
             <Layer {...placesPointLayer} />
             {/* @ts-ignore */}
