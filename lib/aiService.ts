@@ -17,7 +17,7 @@ async function retryWithBackoff<T>(fn: () => Promise<T>, retries = 3, initialDel
     }
 }
 
-export async function generateHistoryAnalysis(stateName: string, year: number): Promise<string> {
+export async function generateHistoryAnalysis(stateName: string, year: number, location?: { lat: number, lng: number }, district?: string): Promise<string> {
     console.log("AI Service Triggered");
     console.log("API Key Status:", API_KEY ? "Present" : "Missing");
 
@@ -33,20 +33,50 @@ export async function generateHistoryAnalysis(stateName: string, year: number): 
             model: "gemini-2.0-flash",
             generationConfig: {
                 maxOutputTokens: 2048, // Ensure response isn't cut off
-                temperature: 0.7
+                temperature: 0.5 // Lower temperature for more factual responses
             }
         });
 
+        const locationContext = location ? `Koordinatlar: (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})` : "";
+        const districtContext = district ? `İlçe (Kesin Bilgi): ${district}` : "";
+
+        const currentYear = new Date().getFullYear();
+
         const prompt = `
-        Sen uzman bir akademik tarihçi ve etimologsun. "${stateName}" yerleşimi/devleti için ${year} yılı bağlamında derinlemesine bir analiz yap.
+        Sen Kıdemli bir Tarihçi ve Coğrafyacısın.
+        
+        **Görev:** Aşağıdaki konum veya bölge için "${year}" yılına odaklanarak kapsamlı bir analiz yap.
+        
+        **Konum:** ${stateName}
+        ${locationContext}
+        ${districtContext}
 
-        Analiz Kuralları:
-        1. 📜 **İlk Kayıt ve Etimoloji**: Şehrin/Devletin adının kökenini, ilk geçtiği kaynağı (Örn: Hitit tabletleri, Heredot, DLT, Evliya Çelebi) ve dilsel değişim sürecini anlat.
-        2. 📊 **Demografik Yapı**: Eğer mevcutsa ${year} dönemine yakın nüfus verilerini, etnik dağılımı ve göç hareketlerini nüfus sayımı veya seyyah notlarına dayanarak belirt.
-        3. 🏛️ **Siyasi ve Sosyal Durum**: O yılın kritik olaylarını özetle.
-        4. 📚 **Akademik Kaynaklar**: Bilgileri dayandırdığın net kaynakları listele (Örn: BOA. Tapu Tahrir Defterleri, Nişanyan, Strabon).
+        **ÖNEMLİ KURALLAR:**
+        1. Sadece "${year}" yılı ve öncesi hakkında bilgi ver. ASLA gelecekten bahsetme.
+        2. Eğer "${year}" yılı günümüzden sonraysa, günümüzdeki durumu anlat.
+        3. Yanıtı AYRIŞTIRILABİLİR XML formatında ver.
+        
+        **YANIT FORMATI (KESİN UYULACAK):**
 
-        Üslubun ansiklopedik, objektif ve veri odaklı olsun. Yanıtı Türkçe ver.
+        <ANALIZ>
+        Buraya tarihçe, etimoloji ve önem hakkında detaylı ansiklopedik metin gelecek.
+        Markdown formatını kullanabilirsin (başlıklar, kalın yazı).
+        Yer adının kökeni ve anlamı hakkında bilgi ver.
+        </ANALIZ>
+
+        <DEMOGRAFI>
+        {
+          "${year}": "~Tahmini Nüfus",
+          "1927": "Varsa Veri",
+          "2023": "Varsa Veri"
+        }
+        (Sadece geçerli bir JSON objesi ver. Yorum yapma.)
+        </DEMOGRAFI>
+
+        <KAYNAKLAR>
+        - Kaynak 1 (Örn: BOA, Tapu Tahrir Defterleri)
+        - Kaynak 2 (Örn: Kamus-ı Türki)
+        </KAYNAKLAR>
         `;
 
         return await retryWithBackoff(async () => {
@@ -131,4 +161,3 @@ export async function getPlaceNameHistory(placeName: string): Promise<PlaceNameE
         return [];
     }
 }
-

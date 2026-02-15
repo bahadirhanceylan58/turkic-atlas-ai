@@ -20,7 +20,7 @@ const files = [
         description: 'Turkey Districts (Level 6)'
     },
     {
-        url: 'https://raw.githubusercontent.com/izzetkalic/geojsons-of-turkey/master/geojsons/turkey-admin-level-8.geojson',
+        url: 'https://media.githubusercontent.com/media/izzetkalic/geojsons-of-turkey/master/geojsons/turkey-admin-level-8.geojson',
         dest: 'turkey-villages-raw.json',
         description: 'Turkey Villages Raw (Level 8) - HUGE FILE'
     }
@@ -101,14 +101,39 @@ async function filterSivasVillages() {
 
     try {
         console.log('[PROCESSING] Filtering Sivas villages...');
+        // Use a streaming approach or read safely if file size allows (100MB is fine for Node usually)
+        // But let's stick to readFileSync for simplicity if it works.
         const rawData = fs.readFileSync(rawPath, 'utf8');
         const geojson = JSON.parse(rawData);
 
-        const sivasFeatures = geojson.features.filter(f => {
+        const sivasFeatures = [];
+
+        geojson.features.forEach(f => {
             const props = f.properties || {};
             const network = props.network || '';
-            // Check various patterns for Sivas (TR58)
-            return network.toLowerCase().includes('sivas') || network.includes('TR58');
+
+            // Expected format: "TR58-DistrictName-köyleri" or similar
+            if (network.includes('TR58') || network.toLowerCase().includes('sivas')) {
+                // Extract district if possible
+                let district = 'Merkez'; // Default
+                const parts = network.split('-');
+                if (parts.length >= 2) {
+                    // Start from index 1 (TR58 is index 0 usually)
+                    // Example: TR58-Kangal-köyleri -> Kangal
+                    // Example: TR58-Sivas-Merkez-köyleri -> Sivas-Merkez?
+                    // Let's take the part after TR58
+                    const districtPart = parts.find(p => p !== 'TR58' && !p.includes('köyleri') && !p.includes('TR'));
+                    if (districtPart) {
+                        district = districtPart;
+                    }
+                }
+
+                // Add inferred properties
+                f.properties.ilce = district;
+                f.properties.city = 'Sivas';
+
+                sivasFeatures.push(f);
+            }
         });
 
         console.log(`[SUCCESS] Found ${sivasFeatures.length} Sivas village features.`);

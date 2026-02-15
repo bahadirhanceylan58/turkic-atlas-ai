@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase'; // Import Supabase Client
 
 // Dynamically import MapBlock to avoid SSR issues with Mapbox
 const MapBlock = dynamic(() => import('@/components/MapComponent'), { ssr: false });
+import { findDistrict, GeoJSONCollection } from '@/lib/geoUtils';
 
 export default function Home() {
   const [selectedYear, setSelectedYear] = useState(2026);
@@ -23,6 +24,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'analysis' | 'demographics' | 'sources'>('analysis');
   const [historyData, setHistoryData] = useState<any>(null); // To store loaded history.json
   const [selectedFeatureData, setSelectedFeatureData] = useState<any>(null);
+  const [districtsGeoJSON, setDistrictsGeoJSON] = useState<GeoJSONCollection | null>(null);
 
   // Place Name History State
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,6 +39,12 @@ export default function Home() {
     fetch('/data/history.json')
       .then(res => res.json())
       .then(data => setHistoryData(data));
+
+    // Load districts data for PIP lookup
+    fetch('/data/turkey-districts.json')
+      .then(res => res.json())
+      .then(data => setDistrictsGeoJSON(data))
+      .catch(err => console.error("Failed to load districts:", err));
   }, []);
 
   // Update current place name based on timeline
@@ -145,16 +153,53 @@ export default function Home() {
     }
 
     try {
-      const analysis = await generateHistoryAnalysis(stateName, selectedYear);
+      const fullResponse = await generateHistoryAnalysis(stateName, selectedYear);
       setIsAnalyzing(false);
 
-      // Typewriter effect
+      // Parse XML Sections
+      const analizMatch = fullResponse.match(/<ANALIZ>([\s\S]*?)<\/ANALIZ>/);
+      const demografiMatch = fullResponse.match(/<DEMOGRAFI>([\s\S]*?)<\/DEMOGRAFI>/);
+      const kaynaklarMatch = fullResponse.match(/<KAYNAKLAR>([\s\S]*?)<\/KAYNAKLAR>/);
+
+      const analizText = analizMatch ? analizMatch[1].trim() : fullResponse;
+      const demografiText = demografiMatch ? demografiMatch[1].trim() : null;
+      const kaynaklarText = kaynaklarMatch ? kaynaklarMatch[1].trim() : null;
+
+      // Process Demographics
+      let demographicsData = null;
+      if (demografiText) {
+        try {
+          demographicsData = JSON.parse(demografiText);
+        } catch (e) {
+          console.error("Failed to parse demographics JSON", e);
+        }
+      }
+
+      // Process Sources
+      let sourcesList: string[] = [];
+      if (kaynaklarText) {
+        sourcesList = kaynaklarText.split('\n')
+          .map(line => line.trim())
+          .filter(line => line.startsWith('-'))
+          .map(line => line.substring(1).trim());
+      }
+
+      // Update parsed data into state (merging with existing feature data)
+      if (demographicsData || sourcesList.length > 0) {
+        setSelectedFeatureData(prev => ({
+          ...prev,
+          demographics: demographicsData || prev?.demographics,
+          sources: sourcesList.length > 0 ? sourcesList : prev?.sources
+        }));
+      }
+
+      // Typewriter effect for Analysis text
+      const analysisToType = analizText;
       let i = 0;
-      // Faster typing (10ms) and safer interval handling
       typingIntervalRef.current = setInterval(() => {
-        setAiAnalysis((prev) => analysis.substring(0, i));
-        i += 2; // Type 2 chars at a time for speed
-        if (i > analysis.length) {
+        setAiAnalysis((prev) => analysisToType.substring(0, i));
+        i += 2;
+        if (i > analysisToType.length) {
           if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
         }
       }, 10);
@@ -204,15 +249,63 @@ export default function Home() {
         setIsAnalyzing(false);
       } else {
         // Trigger AI Analysis for this place
-        const analysis = await generateHistoryAnalysis(place.name, selectedYear);
+        const lat = Number(place.lat || place.latitude);
+        const lng = Number(place.lng || place.longitude);
+        const location = (!isNaN(lat) && !isNaN(lng)) ? { lat, lng } : undefined;
+
+        // Findings district if location is available
+        let district: string | undefined;
+        if (location && districtsGeoJSON) {
+          const d = findDistrict(location.lat, location.lng, districtsGeoJSON);
+          if (d) district = d;
+          console.log(`District lookup for ${place.name}: ${district}`);
+        }
+
+        const fullResponse = await generateHistoryAnalysis(place.name, selectedYear, location, district);
         setIsAnalyzing(false);
 
-        // Typewriter effect
+        // Parse XML Sections
+        const analizMatch = fullResponse.match(/<ANALIZ>([\s\S]*?)<\/ANALIZ>/);
+        const demografiMatch = fullResponse.match(/<DEMOGRAFI>([\s\S]*?)<\/DEMOGRAFI>/);
+        const kaynaklarMatch = fullResponse.match(/<KAYNAKLAR>([\s\S]*?)<\/KAYNAKLAR>/);
+
+        const analizText = analizMatch ? analizMatch[1].trim() : fullResponse; // Fallback to full text if no tags
+        const demografiText = demografiMatch ? demografiMatch[1].trim() : null;
+        const kaynaklarText = kaynaklarMatch ? kaynaklarMatch[1].trim() : null;
+
+        // Process Demographics
+        let demographicsData = null;
+        if (demografiText) {
+          try {
+            demographicsData = JSON.parse(demografiText);
+          } catch (e) {
+            console.error("Failed to parse demographics JSON", e);
+          }
+        }
+
+        // Process Sources
+        let sourcesList: string[] = [];
+        if (kaynaklarText) {
+          sourcesList = kaynaklarText.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.startsWith('-'))
+            .map(line => line.substring(1).trim());
+        }
+
+        // Update parsed data into state
+        setSelectedFeatureData(prev => ({
+          ...prev,
+          demographics: demographicsData || prev?.demographics,
+          sources: sourcesList.length > 0 ? sourcesList : prev?.sources
+        }));
+
+        // Typewriter effect for Analysis text
+        const analysisToType = analizText;
         let i = 0;
         typingIntervalRef.current = setInterval(() => {
-          setAiAnalysis((prev) => analysis.substring(0, i));
+          setAiAnalysis((prev) => analysisToType.substring(0, i));
           i += 2;
-          if (i > analysis.length) {
+          if (i > analysisToType.length) {
             if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
           }
         }, 10);

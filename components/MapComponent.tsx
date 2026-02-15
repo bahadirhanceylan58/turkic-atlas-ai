@@ -5,6 +5,7 @@ import React, { useMemo } from 'react';
 import Map, { Source, Layer, Marker, Popup } from 'react-map-gl/mapbox';
 import { Layers, Plus, Minus, Check, Globe, Map as MapIcon, Moon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import AddPlaceModal from './AddPlaceModal';
 import { motion, AnimatePresence } from 'framer-motion';
 // import type { FeatureCollection } from 'geojson';
 // import 'mapbox-gl/dist/mapbox-gl.css';
@@ -18,6 +19,10 @@ interface MapBlockProps {
 
 const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onPlaceClick, focusedLocation }) => {
   const mapRef = React.useRef<any>(null);
+
+  // Manual Entry State
+  const [isAddMode, setIsAddMode] = React.useState(false);
+  const [addLocation, setAddLocation] = React.useState<{ lat: number; lng: number } | null>(null);
 
   // Fly to focused location when it changes
   React.useEffect(() => {
@@ -443,10 +448,46 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           'cities-label',
           'provinces-fill',
           'districts-fill-click',
+          'turkey-villages-circle', // Added Village Layer
+          'turkey-villages-label',  // Added Village Label
           'places-point',
           'places-label'
         ]}
-        onClick={onMapClick}
+        onClick={(e) => {
+          if (isAddMode) {
+            setAddLocation({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+            return;
+          }
+          // Custom Village handling inside onMapClick or here?
+          // Actually onMapClick handles the logic if we pass the event.
+          // But we need to make sure onMapClick handles the new layers.
+          // Let's modify onMapClick to handle it, OR handle it here.
+          // Since onMapClick is defined above, let's look at it.
+          // The previous edit inserted logic into interactiveLayerIds which was wrong.
+          // We need to move the logic into onMapClick function definition or here.
+
+          // Let's use the onMapClick function defined above, but we need to update IT.
+          // Wait, I can't update onMapClick easily with replace_file_content if I am here.
+          // So I will implement the logic HERE inline for now to fix the syntax error immediately.
+
+          const feature = e.features?.[0];
+          if (feature && (feature.layer.id === 'turkey-villages-circle' || feature.layer.id === 'turkey-villages-label')) {
+            console.log("Village Clicked:", feature.properties);
+            const villageName = feature.properties?.name;
+            if (onPlaceClick && villageName) {
+              onPlaceClick({
+                name: villageName,
+                lat: feature.geometry.type === 'Point' ? (feature.geometry as any).coordinates[1] : e.lngLat.lat,
+                lng: feature.geometry.type === 'Point' ? (feature.geometry as any).coordinates[0] : e.lngLat.lng,
+                type: 'village',
+                ...feature.properties
+              });
+              return;
+            }
+          }
+
+          onMapClick(e);
+        }}
       >
         {processedData && (
           <Source id="history-data" type="geojson" data={processedData}>
@@ -564,22 +605,28 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           />
         </Source>
 
-        {/* Sivas Villages Layer (Auto-Generated) */}
-        <Source id="sivas-villages-data" type="geojson" data="/data/sivas-villages.json">
+        {/* All Turkey Villages Layer (Auto-Generated) */}
+        <Source id="turkey-villages-data" type="geojson" data="/data/turkey-villages.json">
           <Layer
-            id="sivas-villages-circle"
+            id="turkey-villages-circle"
             type="circle"
             paint={{
-              'circle-radius': 3,
+              'circle-radius': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                6, 1,
+                10, 3
+              ],
               'circle-color': '#FFD700', // Gold color
               'circle-stroke-width': 1,
               'circle-stroke-color': '#000000',
               'circle-opacity': 0.8
             }}
-            minzoom={8}
+            minzoom={6}
           />
           <Layer
-            id="sivas-villages-label"
+            id="turkey-villages-label"
             type="symbol"
             layout={{
               'text-field': ['get', 'name'],
@@ -756,7 +803,69 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           </AnimatePresence>
         </div>
       </div>
-    </div>
+
+      {/* Manual Entry Marker (Preview) */}
+      {
+        addLocation && (
+          <Marker longitude={addLocation.lng} latitude={addLocation.lat} anchor="bottom">
+            <div className="text-4xl animate-bounce">📍</div>
+          </Marker>
+        )
+      }
+
+      {/* Add Place Toggle Button */}
+      <div className="absolute top-24 left-4 z-10 flex flex-col gap-2">
+        <button
+          onClick={() => {
+            if (!isAddMode) {
+              // Check for admin/PIN if enabling
+              const pin = prompt("Admin PIN (Varsayılan: 1453):");
+              if (pin === "1453") { // Simple protection
+                setIsAddMode(true);
+                setAddLocation(null);
+              } else {
+                if (pin !== null) alert("Hatalı PIN!");
+              }
+            } else {
+              setIsAddMode(false);
+              setAddLocation(null);
+            }
+          }}
+          className={`p-3 rounded-full shadow-lg transition-all ${isAddMode ? 'bg-amber-500 text-black rotate-45' : 'bg-slate-800 text-white hover:bg-slate-700'
+            }`}
+          title={isAddMode ? "Ekleme Modunu Kapat" : "Yeni Yer Ekle (Admin PIN: 1453)"}
+        >
+          {isAddMode ? <Plus className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+        </button>
+      </div>
+
+      {
+        isAddMode && (
+          <div className="absolute top-4 left-20 z-10 bg-black/70 text-amber-400 px-4 py-2 rounded pointer-events-none border border-amber-500/30 backdrop-blur-md">
+            Haritada bir yere tıklayın
+          </div>
+        )
+      }
+
+      {/* Add Place Modal */}
+      {
+        addLocation && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-4">
+            <AddPlaceModal
+              lat={addLocation.lat}
+              lng={addLocation.lng}
+              onClose={() => setAddLocation(null)}
+              onSuccess={() => {
+                setAddLocation(null);
+                setIsAddMode(false);
+                window.location.reload();
+              }}
+            />
+          </div>
+        )
+      }
+
+    </div >
   );
 };
 
