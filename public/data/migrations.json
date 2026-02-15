@@ -1,0 +1,45 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Oğuz Göçü (11. YY)",
+                "type": "migration_route"
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        66.97,
+                        39.62
+                    ],
+                    [
+                        62.18,
+                        37.66
+                    ],
+                    [
+                        58.79,
+                        36.21
+                    ],
+                    [
+                        51.43,
+                        35.59
+                    ],
+                    [
+                        46.29,
+                        38.06
+                    ],
+                    [
+                        42.49,
+                        38.75
+                    ],
+                    [
+                        37.01,
+                        39.75
+                    ]
+                ]
+            }
+        }
+    ]
+}

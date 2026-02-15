@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { generateHistoryAnalysis, getPlaceNameHistory, PlaceNameEntry } from '@/lib/aiService';
-import { Bot, ChevronRight, X, Search, MapPin } from 'lucide-react';
+import { Bot, ChevronRight, X, Search, MapPin, LogIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AuthModal from '@/components/AuthModal';
 
@@ -26,6 +26,7 @@ export default function Home() {
   const [placeHistory, setPlaceHistory] = useState<PlaceNameEntry[]>([]);
   const [currentPlaceName, setCurrentPlaceName] = useState<PlaceNameEntry | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false); // Mobile search toggle state
 
   useEffect(() => {
     // Load history data for lookup
@@ -130,88 +131,70 @@ export default function Home() {
       {/* Map Layer */}
       <MapBlock selectedYear={selectedYear} onStateClick={handleStateClick} />
 
-      <motion.div
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="absolute top-6 left-6 z-40 flex items-center gap-3 pointer-events-none"
-      >
-        <div className="flex flex-col">
-          <h1 className="text-xl font-bold text-white tracking-wider font-orbitron">
+      {/* Responsive Header */}
+      <header className="absolute top-0 left-0 w-full z-40 p-4 md:p-6 flex items-center justify-between pointer-events-none">
+        {/* Logo */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex flex-col pointer-events-auto"
+        >
+          <h1 className="text-lg md:text-xl font-bold text-white tracking-wider font-orbitron">
             TURKIC <span className="text-cyan-400">ATLAS</span>
           </h1>
-          <span className="text-[10px] text-slate-400 tracking-[0.2em] uppercase">AI Powered History</span>
-        </div>
-      </motion.div>
+          <span className="text-[8px] md:text-[10px] text-slate-400 tracking-[0.2em] uppercase">AI Powered History</span>
+        </motion.div>
 
-      {/* City Search Bar - Top Center */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-md">
-        <form onSubmit={handleCitySearch} className="relative group">
-          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-            <Search className={`w-4 h-4 ${isSearching ? 'text-cyan-400 animate-pulse' : 'text-slate-400'}`} />
+        {/* Right Side Actions */}
+        <div className="flex items-center gap-3 pointer-events-auto">
+          {/* Search Bar */}
+          <div className={`transition-all duration-300 ${mobileSearchOpen ? 'w-full absolute left-0 top-16 px-4' : 'relative'}`}>
+            {/* Mobile Toggle Button */}
+            <button
+              onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+              className="md:hidden bg-slate-900/80 p-2 rounded-full text-slate-400 border border-slate-700 backdrop-blur-md"
+            >
+              {mobileSearchOpen ? <X size={20} /> : <Search size={20} />}
+            </button>
+
+            {/* Search Input (Visible on Desktop OR when Mobile Toggled) */}
+            <form
+              onSubmit={handleCitySearch}
+              className={`${mobileSearchOpen ? 'block' : 'hidden'} md:block md:w-80 lg:w-96 relative group`}
+            >
+              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                <Search className={`w-4 h-4 ${isSearching ? 'text-cyan-400 animate-pulse' : 'text-slate-400'}`} />
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Şehir veya bölge adı yazın..."
+                className="w-full bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-sm rounded-full py-2.5 pl-10 pr-4 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all placeholder:text-slate-500 shadow-lg"
+              />
+              {placeHistory.length > 0 && (
+                <div className="absolute top-1 right-1 px-2 py-1.5 rounded-full text-[10px] bg-slate-800 text-cyan-400 border border-slate-700">
+                  {placeHistory.length}
+                </div>
+              )}
+            </form>
           </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Şehir veya bölge adı yazın (Örn: Sivas)..."
-            className="w-full bg-slate-900/80 backdrop-blur-md border border-slate-700 text-white text-sm rounded-full py-2.5 pl-10 pr-4 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all placeholder:text-slate-500 shadow-lg"
-          />
-          {placeHistory.length > 0 && (
-            <div className="absolute top-1 right-12 text-[10px] bg-slate-800 px-2 py-1.5 rounded-full text-cyan-400 border border-slate-700">
-              {placeHistory.length} Dönem
-            </div>
-          )}
-        </form>
-      </div>
 
-      {/* Dynamic Place Name Card */}
-      <AnimatePresence>
-        {currentPlaceName && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="absolute top-24 left-6 z-30 bg-slate-900/90 backdrop-blur-md border border-cyan-500/30 p-4 rounded-xl shadow-2xl max-w-sm w-full text-center"
+          {/* Login Button/Icon */}
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 hover:border-cyan-500/50 text-white p-2 md:px-6 md:py-2.5 rounded-full transition-all hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] group flex items-center justify-center"
           >
-            <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-1">
-              {searchQuery.toUpperCase()} TARİHÇESİ
-            </div>
-            <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-white mb-1 font-serif">
-              {currentPlaceName.name}
-            </h2>
-            <div className="flex items-center justify-center gap-2 text-sm text-slate-300 mb-3">
-              <span className="bg-slate-800 px-2 py-0.5 rounded text-xs border border-slate-700">
-                {currentPlaceName.language}
-              </span>
-              <span>•</span>
-              <span className="italic">"{currentPlaceName.meaning}"</span>
-            </div>
+            {/* Mobile Icon */}
+            <LogIn className="block md:hidden w-5 h-5 text-cyan-400" />
 
-            <div className="text-xs text-slate-400 border-t border-slate-700/50 pt-2 leading-relaxed">
-              {currentPlaceName.notes}
-            </div>
-
-            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 px-3 py-0.5 rounded-full text-[10px] text-cyan-500 font-mono whitespace-nowrap">
-              {currentPlaceName.startYear} — {currentPlaceName.endYear}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Name Evolution Timeline (Subway Line) */}
-
-
-      {/* Login Button Overlay */}
-      <div className="absolute top-6 right-6 z-40">
-        <button
-          onClick={() => setIsAuthModalOpen(true)}
-          className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 hover:border-cyan-500/50 text-white px-6 py-2.5 rounded-full text-sm font-medium transition-all hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] group"
-        >
-          <span className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent group-hover:from-cyan-400 group-hover:to-blue-400 transition-all">
-            Giriş Yap
-          </span>
-        </button>
-      </div>
+            {/* Desktop Text */}
+            <span className="hidden md:block text-sm font-medium bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent group-hover:from-cyan-400 group-hover:to-blue-400 transition-all">
+              Giriş Yap
+            </span>
+          </button>
+        </div>
+      </header>
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
 

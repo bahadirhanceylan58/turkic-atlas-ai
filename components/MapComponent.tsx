@@ -2,8 +2,9 @@
 // forcing rebuild
 
 import React, { useMemo } from 'react';
-import Map, { Source, Layer } from 'react-map-gl/mapbox';
+import Map, { Source, Layer, Marker, Popup } from 'react-map-gl/mapbox';
 import { Layers, Plus, Minus, Check, Globe, Map as MapIcon, Moon } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 // import type { FeatureCollection } from 'geojson';
 // import 'mapbox-gl/dist/mapbox-gl.css';
@@ -38,6 +39,67 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
       .then(res => res.json())
       .then(data => setGeoData(data));
   }, []);
+
+
+  const [places, setPlaces] = React.useState<any[]>([]);
+  const [selectedPlace, setSelectedPlace] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    const fetchPlaces = async () => {
+      if (!supabase) return;
+      try {
+        const { data, error } = await supabase
+          .from('places')
+          .select('*');
+        if (error) {
+          console.error('Error fetching places:', error);
+        } else {
+          setPlaces(data || []);
+          console.log("🔍 Supabase Veri Kontrolü:");
+          console.log("Toplam Mekan:", data?.length);
+          console.log("Köyler:", data?.filter(p => p.type === 'village').length);
+        }
+      } catch (err) {
+        console.error('Unexpected error fetching places:', err);
+      }
+    };
+
+    fetchPlaces();
+  }, []);
+
+  // Animation Ref
+  const animationRef = React.useRef<number>(0);
+
+  React.useEffect(() => {
+    // Only animate between 1000 and 1100
+    if (selectedYear >= 1000 && selectedYear <= 1100) {
+      const animateDashArray = (timestamp: number) => {
+        const map = mapRef.current?.getMap();
+        if (map && map.getLayer('migration-route-line')) {
+          // Standard marching ants: increment offset
+          // Speed: timestamp / 50 -> slows it down.
+          // Pattern length is 2 (line) + 1 (gap) = 3.
+          // Modulo 3 to keep it in range.
+          const newOffset = (timestamp / 100) % 3;
+
+          map.setPaintProperty('migration-route-line', 'line-dasharray-offset', newOffset);
+
+          animationRef.current = requestAnimationFrame(animateDashArray);
+        } else {
+          // Retry if layer not ready
+          animationRef.current = requestAnimationFrame(animateDashArray);
+        }
+      };
+
+      animationRef.current = requestAnimationFrame(animateDashArray);
+    }
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [selectedYear]);
 
   // Map Style State
   const [mapStyle, setMapStyle] = React.useState<'dark' | 'physical' | 'political'>('dark');
@@ -209,6 +271,97 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
     }
   }), []);
 
+
+  // --- Places GeoJSON Transformation (Performance Optimization) ---
+  const placesGeoJSON = useMemo(() => {
+    if (!places) return null;
+
+    const features = places.map(place => {
+      let lng = Number(place.lng || place.longitude);
+      let lat = Number(place.lat || place.latitude);
+
+      // Parse WKT location if needed
+      if ((isNaN(lng) || isNaN(lat)) && place.location) {
+        const match = place.location.match(/POINT\(([\d.-]+) ([\d.-]+)\)/);
+        if (match) {
+          lng = Number(match[1]);
+          lat = Number(match[2]);
+        }
+      }
+
+      if (isNaN(lng) || isNaN(lat)) return null;
+
+      // Time Machine Logic
+      if (place.type === 'village' && selectedYear <= 1920) return null; // Show villages only after 1920
+
+      if (place.type === 'battle') {
+        const battleYear = place.year || (place.historical_data?.year);
+        if (battleYear) {
+          const start = Math.floor(battleYear / 100) * 100;
+          const end = start + 100;
+          if (selectedYear < start || selectedYear > end) return null;
+        }
+      }
+
+      return {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [lng, lat] },
+        properties: {
+          id: place.id,
+          name: place.name,
+          type: place.type,
+          // Note: Passing complex objects like historical_data might need stringification if used directly in expressions,
+          // but for click handlers we can retrieve the original object from the ID.
+          // We'll keep it simple here.
+        }
+      };
+    }).filter(Boolean);
+
+    return { type: 'FeatureCollection', features };
+  }, [places, selectedYear]);
+
+  // --- Place Layers ---
+  const placesPointLayer: any = useMemo(() => ({
+    id: 'places-point',
+    type: 'circle',
+    paint: {
+      'circle-radius': 6,
+      'circle-color': [
+        'match',
+        ['get', 'type'],
+        'village', '#FDD835',
+        'battle', '#FF0000',
+        'city', '#3FB1CE',
+        '#3FB1CE' // default
+      ],
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#ffffff',
+      'circle-opacity': 0.9,
+      'circle-stroke-opacity': 0.9
+    }
+  }), []);
+
+  const placesLabelLayer: any = useMemo(() => ({
+    id: 'places-label',
+    type: 'symbol',
+    layout: {
+      'text-field': ['get', 'name'],
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-size': 11,
+      'text-offset': [0, 1.2],
+      'text-anchor': 'top',
+      'text-allow-overlap': false,
+      'text-ignore-placement': false
+    },
+    paint: {
+      'text-color': '#ffffff',
+      'text-halo-color': '#000000',
+      'text-halo-width': 2,
+      'text-opacity': 0.9
+    }
+  }), []);
+
+
   // Use simple type filters instead of complex date filters to allow fading
   const stateTypeFilter = useMemo(() => ['==', 'type', 'state'], []);
   const migrationTypeFilter = useMemo(() => ['==', 'type', 'migration'], []);
@@ -217,14 +370,27 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
   const onMapClick = (event: any) => {
     const feature = event.features?.[0];
     if (feature) {
-      // Fly to the clicked feature
-      mapRef.current?.flyTo({
-        center: event.lngLat,
-        zoom: 7,
-        duration: 1000
-      });
 
-      onStateClick(feature.properties.name);
+      // Check if it's a place click
+      if (feature.layer.id === 'places-point' || feature.layer.id === 'places-label') {
+        const placeId = feature.properties.id;
+        const place = places.find(p => p.id === placeId);
+        if (place) {
+          setSelectedPlace(place);
+          mapRef.current?.flyTo({ center: [Number(place.lng || place.longitude || feature.geometry.coordinates[0]), Number(place.lat || place.latitude || feature.geometry.coordinates[1])], zoom: 10, duration: 1000 });
+        }
+        return; // Stop propagation
+      }
+
+      // Fly to the clicked feature (States)
+      if (feature.layer.id === 'states-fill') {
+        mapRef.current?.flyTo({
+          center: event.lngLat,
+          zoom: 7,
+          duration: 1000
+        });
+        onStateClick(feature.properties.name);
+      }
     }
   };
 
@@ -250,7 +416,8 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
           'cities-label',
           'provinces-fill',
           'districts-fill-click',
-          'sivas-villages-point'
+          'places-point',
+          'places-label'
         ]}
         onClick={onMapClick}
       >
@@ -348,43 +515,119 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
                 minzoom={8}
               />
             </Source>
-
-            {/* Sivas Villages Layer */}
-            <Source id="sivas-villages-data" type="geojson" data="/data/sivas-villages.json">
-              <Layer
-                id="sivas-villages-point"
-                type="circle"
-                paint={{
-                  'circle-radius': 6, // Larger for easier clicking
-                  'circle-color': '#FDD835',
-                  'circle-stroke-width': 2,
-                  'circle-stroke-color': '#000'
-                }}
-                minzoom={8} // Lower minzoom to see them sooner
-              />
-              <Layer
-                id="sivas-villages-label"
-                type="symbol"
-                layout={{
-                  'text-field': ['get', 'name'],
-                  'text-size': 11,
-                  'text-offset': [0, 1.2],
-                  'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold']
-                }}
-                paint={{
-                  'text-color': '#FFF59D',
-                  'text-halo-color': '#000000',
-                  'text-halo-width': 1.5
-                }}
-                minzoom={8}
-              />
-            </Source>
           </>
         )}
+
+        {/* Migration Route (1000-1100) */}
+        <Source id="migration-route-data" type="geojson" data="/data/migrations.json">
+          <Layer
+            id="migration-route-line"
+            type="line"
+            paint={{
+              'line-color': '#FFA500',
+              'line-width': 5,
+              'line-dasharray': [2, 1],
+              'line-opacity': 0.8
+            }}
+            layout={{
+              'line-join': 'round',
+              'line-cap': 'round',
+              'visibility': (selectedYear >= 1000 && selectedYear <= 1100) ? 'visible' : 'none'
+            }}
+          />
+        </Source>
+
+
+        {/* Supabase Markers */}
+        {/* Places Source & Layers (GeoJSON) */}
+        {placesGeoJSON && (
+          <Source id="places-source" type="geojson" data={placesGeoJSON}>
+            {/* @ts-ignore */}
+            <Layer {...placesPointLayer} />
+            {/* @ts-ignore */}
+            <Layer {...placesLabelLayer} />
+          </Source>
+        )}
+
+        {/* Selected Place Popup */}
+        {selectedPlace && (() => {
+          let lng = Number(selectedPlace.lng || selectedPlace.longitude);
+          let lat = Number(selectedPlace.lat || selectedPlace.latitude);
+          if ((isNaN(lng) || isNaN(lat)) && selectedPlace.location) {
+            const match = selectedPlace.location.match(/POINT\(([\d.-]+) ([\d.-]+)\)/);
+            if (match) {
+              lng = Number(match[1]);
+              lat = Number(match[2]);
+            }
+          }
+          if (isNaN(lng) || isNaN(lat)) return null;
+
+          return (
+            <Popup
+              longitude={lng}
+              latitude={lat}
+              anchor="top"
+              onClose={() => setSelectedPlace(null)}
+              closeOnClick={false}
+            >
+              <div className="text-black p-1 max-w-xs">
+                <h3 className="font-bold text-lg mb-1">{selectedPlace.name}</h3>
+                <p className="text-sm text-gray-600 capitalize mb-2">{selectedPlace.type}</p>
+
+                <div className="mb-3 max-h-40 overflow-y-auto">
+                  {selectedPlace.historical_data?.description ? (
+                    <p className="text-sm text-gray-800">{selectedPlace.historical_data.description}</p>
+                  ) : (
+                    <p className="text-xs text-gray-500 italic">Kayıtlı bilgi bulunmamaktadır.</p>
+                  )}
+                  {selectedPlace.historical_data?.source_url && (
+                    <a href={selectedPlace.historical_data.source_url} target="_blank" rel="noopener noreferrer" className="block mt-1 text-xs text-blue-600 hover:underline">Kaynak Linki</a>
+                  )}
+                </div>
+
+                <div className="border-t border-gray-200 pt-2 mt-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const place = selectedPlace; // Capture current
+                      const newDesc = prompt("Açıklama giriniz:", place.historical_data?.description || "");
+                      if (newDesc === null) return;
+
+                      const newSource = prompt("Kaynak URL (varsa):", place.historical_data?.source_url || "");
+                      if (newSource === null) return;
+
+                      const updatedData = {
+                        ...place.historical_data,
+                        description: newDesc,
+                        source_url: newSource
+                      };
+
+                      const updatedPlace = { ...place, historical_data: updatedData };
+                      setPlaces(prev => prev.map(p => p.id === place.id ? updatedPlace : p));
+                      setSelectedPlace(updatedPlace);
+
+                      if (supabase) {
+                        supabase.from('places').update({ historical_data: updatedData }).eq('id', place.id)
+                          .then(({ error }) => {
+                            if (error) console.error("Update error:", error);
+                            else console.log("Saved!");
+                          });
+                      }
+                    }}
+                    className="w-full bg-blue-50 text-blue-600 px-3 py-1 rounded text-xs hover:bg-blue-100 transition-colors flex items-center justify-center gap-1"
+                  >
+                    <span>✏️ Bilgi Ekle / Düzenle</span>
+                  </button>
+                </div>
+              </div>
+            </Popup>
+          );
+        })()}
+
       </Map>
 
-      {/* Map Controls (Bottom-Left) */}
-      <div className="absolute bottom-24 left-6 flex flex-col gap-2 z-50">
+      {/* Map Controls (Responsive) */}
+      <div className="absolute flex flex-col gap-2 z-50 top-1/2 right-4 -translate-y-1/2 md:top-auto md:right-auto md:bottom-24 md:left-6 md:translate-y-0">
 
         {/* Zoom Controls */}
         <div className="flex flex-col bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-lg overflow-hidden shadow-lg">
@@ -452,7 +695,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
           </AnimatePresence>
         </div>
       </div>
-    </div >
+    </div>
   );
 };
 
