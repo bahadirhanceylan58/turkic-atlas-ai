@@ -81,16 +81,61 @@ function downloadFile(file) {
     });
 }
 
+async function filterSivasVillages() {
+    const rawPath = path.join(DATA_DIR, 'turkey-villages-raw.json');
+    const destPath = path.join(DATA_DIR, 'sivas-villages.json');
+
+    if (!fs.existsSync(rawPath)) {
+        console.log('[WARN] Raw village file not found, skipping Sivas filter.');
+        return;
+    }
+
+    // Skip if Sivas file already exists and is reasonably large (e.g. > 1KB)
+    if (fs.existsSync(destPath)) {
+        const stats = fs.statSync(destPath);
+        if (stats.size > 1024) {
+            console.log(`[SKIP] sivas-villages.json already exists (${(stats.size / 1024).toFixed(2)} KB).`);
+            return;
+        }
+    }
+
+    try {
+        console.log('[PROCESSING] Filtering Sivas villages...');
+        const rawData = fs.readFileSync(rawPath, 'utf8');
+        const geojson = JSON.parse(rawData);
+
+        const sivasFeatures = geojson.features.filter(f => {
+            const props = f.properties || {};
+            const network = props.network || '';
+            // Check various patterns for Sivas (TR58)
+            return network.toLowerCase().includes('sivas') || network.includes('TR58');
+        });
+
+        console.log(`[SUCCESS] Found ${sivasFeatures.length} Sivas village features.`);
+
+        const sivasGeoJSON = {
+            type: "FeatureCollection",
+            features: sivasFeatures
+        };
+
+        fs.writeFileSync(destPath, JSON.stringify(sivasGeoJSON));
+        console.log('[SUCCESS] Saved sivas-villages.json');
+
+    } catch (err) {
+        console.error('[ERROR] Failed to filter Sivas villages:', err.message);
+    }
+}
+
 async function downloadAll() {
     console.log('--- Starting Map Data Download ---');
     for (const file of files) {
         await downloadFile(file);
     }
-    console.log('--- Download Process Complete ---');
 
-    // Run post-processing if needed (e.g., Sivas filter)
-    // We can require logic here or run as separate script. 
-    // For now, raw files are enough.
+    // Post-processing
+    await filterSivasVillages();
+
+    console.log('--- Download & Processing Complete ---');
 }
 
 downloadAll();

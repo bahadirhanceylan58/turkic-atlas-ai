@@ -564,6 +564,39 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           />
         </Source>
 
+        {/* Sivas Villages Layer (Auto-Generated) */}
+        <Source id="sivas-villages-data" type="geojson" data="/data/sivas-villages.json">
+          <Layer
+            id="sivas-villages-circle"
+            type="circle"
+            paint={{
+              'circle-radius': 3,
+              'circle-color': '#FFD700', // Gold color
+              'circle-stroke-width': 1,
+              'circle-stroke-color': '#000000',
+              'circle-opacity': 0.8
+            }}
+            minzoom={8}
+          />
+          <Layer
+            id="sivas-villages-label"
+            type="symbol"
+            layout={{
+              'text-field': ['get', 'name'],
+              'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+              'text-size': 10,
+              'text-offset': [0, 1.2],
+              'text-anchor': 'top'
+            }}
+            paint={{
+              'text-color': '#FFF',
+              'text-halo-color': '#000',
+              'text-halo-width': 1
+            }}
+            minzoom={10}
+          />
+        </Source>
+
 
         {/* Supabase Markers */}
         {/* Places Source & Layers (GeoJSON) */}
