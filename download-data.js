@@ -2,44 +2,95 @@ const fs = require('fs');
 const https = require('https');
 const path = require('path');
 
+const DATA_DIR = path.join(__dirname, 'public/data');
+
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
 const files = [
     {
         url: 'https://raw.githubusercontent.com/izzetkalic/geojsons-of-turkey/master/geojsons/turkey-admin-level-4.geojson',
-        dest: 'public/data/turkey-provinces.json'
+        dest: 'turkey-provinces.json',
+        description: 'Turkey Provinces (Level 4)'
     },
     {
         url: 'https://raw.githubusercontent.com/izzetkalic/geojsons-of-turkey/master/geojsons/turkey-admin-level-6.geojson',
-        dest: 'public/data/turkey-districts.json'
+        dest: 'turkey-districts.json',
+        description: 'Turkey Districts (Level 6)'
+    },
+    {
+        url: 'https://raw.githubusercontent.com/izzetkalic/geojsons-of-turkey/master/geojsons/turkey-admin-level-8.geojson',
+        dest: 'turkey-villages-raw.json',
+        description: 'Turkey Villages Raw (Level 8) - HUGE FILE'
     }
-    // Level 8 might be huge, let's skip for now or handle separately. 
-    // User asked for Sivas villages. I'll check level 8 later if needed or try to find a specific sivas file.
-    // Actually, let's try to download level 8 but rename it to indicate it's huge/raw.
-    // ,{
-    //   url: 'https://raw.githubusercontent.com/izzetkalic/geojsons-of-turkey/master/geojsons/turkey-admin-level-8.geojson',
-    //   dest: 'public/data/turkey-villages-raw.json'
-    // }
 ];
 
-files.forEach(file => {
-    const filePath = path.join(__dirname, file.dest);
-    const fileStream = fs.createWriteStream(filePath);
+function downloadFile(file) {
+    return new Promise((resolve, reject) => {
+        const destPath = path.join(DATA_DIR, file.dest);
 
-    console.log(`Downloading ${file.url} to ${filePath}...`);
-
-    https.get(file.url, (response) => {
-        if (response.statusCode !== 200) {
-            console.error(`Failed to download ${file.url}: Status Code ${response.statusCode}`);
-            return;
+        // Skip if file exists and is larger than 0 bytes (simple check)
+        // For Vercel, we can force download or just check existence. 
+        // Vercel cache might keep files, so existence check is good.
+        if (fs.existsSync(destPath)) {
+            const stats = fs.statSync(destPath);
+            if (stats.size > 1000) {
+                console.log(`[SKIP] ${file.dest} already exists (${(stats.size / 1024 / 1024).toFixed(2)} MB).`);
+                resolve();
+                return;
+            }
         }
 
-        response.pipe(fileStream);
+        const fileStream = fs.createWriteStream(destPath);
+        console.log(`[DOWNLOAD] Starting ${file.dest} from ${file.url}...`);
 
-        fileStream.on('finish', () => {
-            fileStream.close();
-            console.log(`Finished downloading ${file.dest}`);
+        const request = https.get(file.url, (response) => {
+            // Handle Redirects
+            if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                console.log(`[REDIRECT] ${file.dest} -> ${response.headers.location}`);
+                fileStream.close();
+                downloadFile({ ...file, url: response.headers.location }).then(resolve).catch(reject);
+                return;
+            }
+
+            if (response.statusCode !== 200) {
+                console.error(`[ERROR] Failed to download ${file.dest}: Status Code ${response.statusCode}`);
+                fileStream.close();
+                fs.unlink(destPath, () => { }); // Clean up empty file
+                // Don't reject, just warn, so build doesn't fail if one file is missing (unless critical)
+                // But these ARE critical for the map. Let's resolve but log error.
+                resolve();
+                return;
+            }
+
+            response.pipe(fileStream);
+
+            fileStream.on('finish', () => {
+                fileStream.close();
+                console.log(`[SUCCESS] Finished ${file.dest}`);
+                resolve();
+            });
         });
-    }).on('error', (err) => {
-        fs.unlink(filePath, () => { });
-        console.error(`Error downloading ${file.url}: ${err.message}`);
+
+        request.on('error', (err) => {
+            fs.unlink(destPath, () => { });
+            console.error(`[ERROR] Network error for ${file.dest}: ${err.message}`);
+            resolve(); // Resolve to allow other downloads to proceed
+        });
     });
-});
+}
+
+async function downloadAll() {
+    console.log('--- Starting Map Data Download ---');
+    for (const file of files) {
+        await downloadFile(file);
+    }
+    console.log('--- Download Process Complete ---');
+
+    // Run post-processing if needed (e.g., Sivas filter)
+    // We can require logic here or run as separate script. 
+    // For now, raw files are enough.
+}
+
+downloadAll();
