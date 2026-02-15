@@ -336,7 +336,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
       };
     }).filter(Boolean);
 
-    return { type: 'FeatureCollection', features };
+    return { type: 'FeatureCollection', features } as any;
   }, [places, selectedYear]);
 
   // --- Place Layers ---
