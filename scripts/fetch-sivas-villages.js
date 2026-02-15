@@ -15,19 +15,27 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 async function fetchAndUploadVillages() {
     console.log("🦅 Sivas köyleri aranıyor (OpenStreetMap)...");
     // Sivas merkezi (39.75, 37.01) etrafında 150km çap
-    const overpassQuery = `[out:json];(node["place"="village"](around:150000, 39.7505, 37.0142););out body;`;
+    // Fetch villages, towns, and cities
+    const overpassQuery = `[out:json];(node["place"~"village|town|city"](around:150000, 39.7505, 37.0142););out body;`;
 
     try {
         const response = await axios.get('https://overpass-api.de/api/interpreter', { params: { data: overpassQuery } });
-        const villages = response.data.elements;
-        console.log(`✅ ${villages.length} köy bulundu. Yükleniyor...`);
+        const places = response.data.elements;
+        console.log(`✅ ${places.length} yerleşim yeri bulundu. Yükleniyor...`);
 
-        const rowsToInsert = villages.map(v => ({
-            name: v.tags.name || "İsimsiz",
-            location: `POINT(${v.lon} ${v.lat})`,
-            type: 'village',
-            historical_data: { source: "OSM", province: "Sivas", osm_id: v.id }
-        }));
+        const rowsToInsert = places.map(v => {
+            let type = 'village';
+            if (v.tags.place === 'town' || v.tags.place === 'city') type = 'city';
+
+            return {
+                name: v.tags.name || "İsimsiz",
+                lat: v.lat,
+                lng: v.lon,
+                type: type,
+                // year: 2024 (Removed as column missing)
+                historical_data: { source: "OSM", osm_id: v.id, original_type: v.tags.place, year: 2024 }
+            };
+        });
 
         for (let i = 0; i < rowsToInsert.length; i += 50) {
             const { error } = await supabase.from('places').insert(rowsToInsert.slice(i, i + 50));

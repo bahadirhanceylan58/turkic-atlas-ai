@@ -7,11 +7,14 @@ import { Bot, ChevronRight, X, Search, MapPin, LogIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AuthModal from '@/components/AuthModal';
 
+import { supabase } from '@/lib/supabase'; // Import Supabase Client
+
 // Dynamically import MapBlock to avoid SSR issues with Mapbox
 const MapBlock = dynamic(() => import('@/components/MapComponent'), { ssr: false });
 
 export default function Home() {
   const [selectedYear, setSelectedYear] = useState(2026);
+  const [focusedLocation, setFocusedLocation] = useState<{ lat: number, lng: number } | null>(null); // State for Map flyTo
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [selectedState, setSelectedState] = useState<string | null>(null);
@@ -27,6 +30,7 @@ export default function Home() {
   const [currentPlaceName, setCurrentPlaceName] = useState<PlaceNameEntry | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false); // Mobile search toggle state
+  const [isInfoBoxOpen, setIsInfoBoxOpen] = useState(false); // New state for Left Info Box visibility
 
   useEffect(() => {
     // Load history data for lookup
@@ -57,10 +61,35 @@ export default function Home() {
     try {
       const history = await getPlaceNameHistory(searchQuery);
       setPlaceHistory(history);
+      setIsInfoBoxOpen(true); // Open the info box on successful search
       if (history.length > 0) {
         // Set initial view to matched year
         const entry = history.find(p => selectedYear >= p.startYear && selectedYear <= p.endYear);
         setCurrentPlaceName(entry || history[0]);
+
+        // --- NEW: Go to location on map if possible ---
+        // Try to find ANY place in DB that matches the search query (roughly)
+        // We import supabase client and query 'places' table.
+        // Assuming 'name' or 'current_label' logic.
+        const { data: placeData, error } = await supabase
+          .from('places')
+          .select('lat, lng') // select minimal needed
+          .ilike('name', `%${searchQuery}%`)
+          .limit(1)
+          .maybeSingle();
+
+        if (placeData) {
+          let lat = Number(placeData.lat);
+          let lng = Number(placeData.lng);
+
+          if (!isNaN(lat) && !isNaN(lng)) {
+            setFocusedLocation({ lat, lng });
+          }
+        } else {
+          // Optional: Show "Not found" toast or alert
+          console.log("Place not found in DB");
+          // alert("Yer bulunamadı!"); // Uncomment if you want a popup
+        }
       }
     } catch (err) {
       console.error(err);
@@ -126,10 +155,74 @@ export default function Home() {
     }
   };
 
+  const handlePlaceClick = async (place: any) => {
+    // Open AI Panel with Place Info
+    setSelectedState(place.name); // Title of the panel
+
+    // Determine data source (Supabase 'historical_data' or place properties)
+    const placeInfo = place.historical_data || {};
+
+    // Set feature data for the panel (reusing structure for display)
+    setSelectedFeatureData({
+      ...placeInfo,
+      name: place.name,
+      type: place.type,
+      confidence_score: 95
+    });
+
+    setAiPanelOpen(true);
+    setAiAnalysis('');
+    setIsAnalyzing(true);
+    setActiveTab('analysis');
+
+    // Clear any existing typing interval
+    if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+
+    // Generate Analysis or use Description
+    try {
+      if (placeInfo.description) {
+        // Typewriter effect for existing description
+        const analysis = placeInfo.description;
+        let i = 0;
+        typingIntervalRef.current = setInterval(() => {
+          setAiAnalysis((prev) => analysis.substring(0, i));
+          i += 2;
+          if (i > analysis.length) {
+            if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+          }
+        }, 10);
+        setIsAnalyzing(false);
+      } else {
+        // Trigger AI Analysis for this place
+        const analysis = await generateHistoryAnalysis(place.name, selectedYear);
+        setIsAnalyzing(false);
+
+        // Typewriter effect
+        let i = 0;
+        typingIntervalRef.current = setInterval(() => {
+          setAiAnalysis((prev) => analysis.substring(0, i));
+          i += 2;
+          if (i > analysis.length) {
+            if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+          }
+        }, 10);
+      }
+    } catch (error) {
+      console.error(error);
+      setIsAnalyzing(false);
+      setAiAnalysis("Bu yer için detaylı analiz henüz oluşturulamadı.");
+    }
+  };
+
   return (
     <main className="w-full h-screen relative bg-black overflow-hidden font-sans">
       {/* Map Layer */}
-      <MapBlock selectedYear={selectedYear} onStateClick={handleStateClick} />
+      <MapBlock
+        selectedYear={selectedYear}
+        onStateClick={handleStateClick}
+        onPlaceClick={handlePlaceClick}
+        focusedLocation={focusedLocation}
+      />
 
       {/* Responsive Header */}
       <header className="absolute top-0 left-0 w-full z-40 p-4 md:p-6 flex items-center justify-between pointer-events-none">
@@ -319,6 +412,68 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Timeline Control Panel */}
+      {/* Search Result / Historical Context Box (Left Side) */}
+      <AnimatePresence>
+        {(currentPlaceName || (searchQuery && placeHistory.length > 0)) && (
+          <motion.div
+            initial={{ opacity: 0, x: -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            className="absolute top-24 left-4 md:left-6 z-30 w-64 md:w-80"
+          >
+            <div className="bg-slate-900/80 backdrop-blur-md border border-cyan-500/30 rounded-xl p-5 shadow-[0_0_15px_rgba(6,182,212,0.15)] relative overflow-hidden group">
+
+              {/* Decorative Background Elements */}
+              <div className="absolute -right-4 -top-4 w-20 h-20 bg-cyan-500/20 rounded-full blur-xl group-hover:bg-cyan-500/30 transition-all duration-500" />
+              <div className="absolute -left-4 -bottom-4 w-16 h-16 bg-blue-600/20 rounded-full blur-xl group-hover:bg-blue-600/30 transition-all duration-500" />
+
+              <div className="relative z-10">
+                {/* Header */}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-1.5 bg-cyan-500/20 rounded-lg">
+                    <MapPin className="text-cyan-400 w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold text-cyan-400 tracking-wider uppercase">Tarihsel İsim</span>
+                </div>
+
+                {/* Main Name (Historical) */}
+                <h2 className="text-3xl font-black text-white mb-1 tracking-tight">
+                  {currentPlaceName?.name || searchQuery}
+                </h2>
+
+                {/* Subtitle (Modern Name if different) */}
+                {currentPlaceName && currentPlaceName.name !== searchQuery && (
+                  <div className="flex items-center gap-2 text-slate-400 text-sm mb-3">
+                    <span className="w-1 h-1 bg-slate-500 rounded-full"></span>
+                    <span>Modern: <span className="text-slate-200 font-medium">{searchQuery}</span></span>
+                  </div>
+                )}
+
+                {/* Divider */}
+                <div className="h-px w-full bg-gradient-to-r from-cyan-500/50 to-transparent my-3" />
+
+                {/* Context Info */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-400">Dönem:</span>
+                    <span className="text-cyan-300 font-mono font-medium">
+                      {currentPlaceName ? `${Math.abs(currentPlaceName.startYear)} ${currentPlaceName.startYear < 0 ? 'M.Ö.' : ''} - ${currentPlaceName.endYear}` : 'Bilinmeyen'}
+                    </span>
+                  </div>
+
+                  {/* Description snippet if available */}
+                  {currentPlaceName?.description && (
+                    <p className="text-xs text-slate-300 italic mt-2 line-clamp-3">
+                      "{currentPlaceName.description}"
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Timeline Control Panel */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl z-40">
         <div className="flex flex-col items-center">

@@ -12,10 +12,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface MapBlockProps {
   selectedYear: number;
   onStateClick: (stateName: string) => void;
+  onPlaceClick?: (place: any) => void;
+  focusedLocation?: { lat: number, lng: number } | null;
 }
 
-const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) => {
+const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onPlaceClick, focusedLocation }) => {
   const mapRef = React.useRef<any>(null);
+
+  // Fly to focused location when it changes
+  React.useEffect(() => {
+    if (focusedLocation && mapRef.current) {
+      mapRef.current.flyTo({
+        center: [focusedLocation.lng, focusedLocation.lat],
+        zoom: 12,
+        duration: 2000
+      });
+    }
+  }, [focusedLocation]);
 
   // Expose flyTo capability or handle it internally when prop changes? 
   // For now, let's handle click centering internally if possible, or simple "flyTo" on click.
@@ -75,18 +88,24 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
     if (selectedYear >= 1000 && selectedYear <= 1100) {
       const animateDashArray = (timestamp: number) => {
         const map = mapRef.current?.getMap();
-        if (map && map.getLayer('migration-route-line')) {
-          // Standard marching ants: increment offset
-          // Speed: timestamp / 50 -> slows it down.
-          // Pattern length is 2 (line) + 1 (gap) = 3.
-          // Modulo 3 to keep it in range.
-          const newOffset = (timestamp / 100) % 3;
+        if (!map || !map.getStyle() || !map.getSource('migration-route-data')) {
+          // Wait for map or source to be ready
+          animationRef.current = requestAnimationFrame(animateDashArray);
+          return;
+        }
 
-          map.setPaintProperty('migration-route-line', 'line-dasharray-offset', newOffset);
+        if (map.getLayer('migration-route-line')) {
+          // Standard marching ants: increment offset
+          const newOffset = (timestamp / 100) % 3;
+          try {
+            map.setPaintProperty('migration-route-line', 'line-dasharray-offset', newOffset);
+          } catch (e) {
+            // Ignore animation errors during hot reload or init
+          }
 
           animationRef.current = requestAnimationFrame(animateDashArray);
         } else {
-          // Retry if layer not ready
+          // Layer not visible or present, just loop
           animationRef.current = requestAnimationFrame(animateDashArray);
         }
       };
@@ -324,6 +343,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
   const placesPointLayer: any = useMemo(() => ({
     id: 'places-point',
     type: 'circle',
+    minzoom: 8, // Don't show when zoomed out
     paint: {
       'circle-radius': 6,
       'circle-color': [
@@ -344,6 +364,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
   const placesLabelLayer: any = useMemo(() => ({
     id: 'places-label',
     type: 'symbol',
+    minzoom: 9, // Labels appear later to reduce clutter
     layout: {
       'text-field': ['get', 'name'],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
@@ -376,8 +397,14 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick }) =
         const placeId = feature.properties.id;
         const place = places.find(p => p.id === placeId);
         if (place) {
-          setSelectedPlace(place);
           mapRef.current?.flyTo({ center: [Number(place.lng || place.longitude || feature.geometry.coordinates[0]), Number(place.lat || place.latitude || feature.geometry.coordinates[1])], zoom: 10, duration: 1000 });
+
+          if (onPlaceClick) {
+            onPlaceClick(place);
+          } else {
+            // Fallback if no callback provided (old behavior)
+            setSelectedPlace(place);
+          }
         }
         return; // Stop propagation
       }
