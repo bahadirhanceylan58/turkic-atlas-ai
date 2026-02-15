@@ -74,6 +74,7 @@ export interface PlaceNameEntry {
     meaning: string;
     notes: string;
     source?: string;
+    description?: string;
 }
 
 export async function getPlaceNameHistory(placeName: string): Promise<PlaceNameEntry[]> {
