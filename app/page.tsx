@@ -472,9 +472,9 @@ export default function Home() {
                   </div>
 
                   {/* Description snippet if available (using notes as fallback) */}
-                  {(currentPlaceName?.description || currentPlaceName?.notes) && (
+                  {((currentPlaceName as any)?.description || (currentPlaceName as any)?.notes) && (
                     <p className="text-xs text-slate-300 italic mt-2 line-clamp-3">
-                      "{currentPlaceName.description || currentPlaceName.notes}"
+                      "{(currentPlaceName as any).description || (currentPlaceName as any).notes}"
                     </p>
                   )}
                 </div>
