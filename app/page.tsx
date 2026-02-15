@@ -71,12 +71,22 @@ export default function Home() {
         // Try to find ANY place in DB that matches the search query (roughly)
         // We import supabase client and query 'places' table.
         // Assuming 'name' or 'current_label' logic.
-        const { data: placeData, error } = await supabase
-          .from('places')
-          .select('lat, lng') // select minimal needed
-          .ilike('name', `%${searchQuery}%`)
-          .limit(1)
-          .maybeSingle();
+        let placeData = null;
+
+        if (supabase) {
+          const { data, error } = await supabase
+            .from('places')
+            .select('lat, lng') // select minimal needed
+            .ilike('name', `%${searchQuery}%`)
+            .limit(1)
+            .maybeSingle();
+
+          if (error) {
+            console.error("Supabase search error:", error);
+          } else {
+            placeData = data;
+          }
+        }
 
         if (placeData) {
           let lat = Number(placeData.lat);
