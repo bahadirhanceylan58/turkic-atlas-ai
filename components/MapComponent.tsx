@@ -7,7 +7,7 @@ import { Layers, Plus, Minus, Check, Globe, Map as MapIcon, Moon } from 'lucide-
 import { supabase } from '@/lib/supabase';
 import AddPlaceModal from './AddPlaceModal';
 import { motion, AnimatePresence } from 'framer-motion';
-// import type { FeatureCollection } from 'geojson';
+import { getCitiesForYear } from '@/lib/historicalCityNames';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface MapBlockProps {
@@ -83,6 +83,12 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   const [worldMapData, setWorldMapData] = React.useState<any | null>(null);
   const [loadedMapYear, setLoadedMapYear] = React.useState<number | null>(null);
   const mapCache = React.useRef<{ [key: number]: any }>({});
+
+  // Historical City Names - compute visible cities for the selected year
+  const historicalCityMarkers = useMemo(() => {
+    if (!historyMode) return [];
+    return getCitiesForYear(selectedYear);
+  }, [historyMode, selectedYear]);
 
   // Fetch Full World Map on Year Change
   React.useEffect(() => {
@@ -662,6 +668,36 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           map.on('styledata', () => {
             updateLayerVisibility(map);
           });
+
+          // Click handler for historical city labels
+          map.on('click', 'historical-city-labels', (e: any) => {
+            if (!e.features || e.features.length === 0) return;
+            const props = e.features[0].properties;
+            const coords = e.features[0].geometry.coordinates;
+            if (onPlaceClick) {
+              onPlaceClick({
+                name: props.historicalName,
+                lat: coords[1],
+                lng: coords[0],
+                type: 'historical-city',
+                modernName: props.modernName,
+                civilization: props.civilization,
+              });
+            }
+            mapRef.current?.flyTo({
+              center: coords,
+              zoom: 8,
+              duration: 1000,
+            });
+          });
+
+          // Pointer cursor on hover
+          map.on('mouseenter', 'historical-city-labels', () => {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+          map.on('mouseleave', 'historical-city-labels', () => {
+            map.getCanvas().style.cursor = '';
+          });
         }}
       >
         {/* Historical State Polygons — FULL WORLD HISTORY MODE */}
@@ -873,6 +909,67 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
             </Popup>
           );
         })()}
+
+        {/* Historical City Name Labels — Clean text on map (History Mode only) */}
+        {historyMode && historicalCityMarkers.length > 0 && (
+          <Source
+            id="historical-city-names"
+            type="geojson"
+            data={{
+              type: 'FeatureCollection',
+              features: historicalCityMarkers.map((city, idx) => ({
+                type: 'Feature' as const,
+                id: idx,
+                geometry: {
+                  type: 'Point' as const,
+                  coordinates: [city.lng, city.lat],
+                },
+                properties: {
+                  historicalName: city.historicalName,
+                  modernName: city.modernName,
+                  civilization: city.civilization,
+                  label: city.historicalName !== city.modernName
+                    ? `${city.historicalName}\n(${city.modernName})`
+                    : city.historicalName,
+                },
+              })),
+            }}
+          >
+            {/* City name text */}
+            <Layer
+              id="historical-city-labels"
+              type="symbol"
+              layout={{
+                'text-field': ['get', 'label'],
+                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                'text-size': [
+                  'interpolate', ['linear'], ['zoom'],
+                  2, 9,
+                  5, 12,
+                  8, 15,
+                ],
+                'text-anchor': 'top',
+                'text-offset': [0, 0.5],
+                'text-allow-overlap': false,
+                'text-ignore-placement': false,
+                'text-max-width': 10,
+                'text-line-height': 1.2,
+                'icon-image': 'circle-11',
+                'icon-size': 0.7,
+                'icon-anchor': 'center',
+                'icon-allow-overlap': true,
+              }}
+              paint={{
+                'text-color': '#4a2c0a',
+                'text-halo-color': '#f5e6c8',
+                'text-halo-width': 1.5,
+                'text-halo-blur': 0.5,
+                'text-opacity': 0.95,
+              }}
+              minzoom={2}
+            />
+          </Source>
+        )}
 
       </Map>
 

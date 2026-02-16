@@ -506,28 +506,19 @@ export default function Home() {
             </form>
           </div>
 
-          {/* Admin Login */}
-          <button
-            onClick={() => {
-              if (isAdmin) {
-                setIsAdmin(false);
-              } else {
-                const pin = prompt('Admin PIN:');
-                if (pin === '1453') {
-                  setIsAdmin(true);
-                } else if (pin !== null) {
-                  alert('Hatalı PIN!');
-                }
-              }
-            }}
-            className={`p-2 rounded-full transition-all backdrop-blur-md border ${isAdmin
-              ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
-              : 'bg-slate-900/80 border-slate-700/50 text-slate-400 hover:text-white'
-              }`}
-            title={isAdmin ? 'Admin Çıkış' : 'Admin Giriş'}
-          >
-            <KeyRound className="w-4 h-4 md:w-5 md:h-5" />
-          </button>
+          {/* Admin Login — only visible to admin email */}
+          {currentUser?.email === 'bahadirhanceylan@gmail.com' && (
+            <button
+              onClick={() => setIsAdmin(!isAdmin)}
+              className={`p-2 rounded-full transition-all backdrop-blur-md border ${isAdmin
+                ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
+                : 'bg-slate-900/80 border-slate-700/50 text-slate-400 hover:text-white'
+                }`}
+              title={isAdmin ? 'Admin Çıkış' : 'Admin Modu'}
+            >
+              <KeyRound className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+          )}
 
           {/* User Auth Area */}
           {currentUser ? (
