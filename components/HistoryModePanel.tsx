@@ -30,11 +30,10 @@ interface HistoryModePanelProps {
 }
 
 const ERAS = [
-    { name: 'Antik', startYear: -1000, endYear: 476, color: '#8D6E63' },
-    { name: 'Göktürk', startYear: 552, endYear: 744, color: '#627BC1' },
-    { name: 'Selçuklu', startYear: 1037, endYear: 1307, color: '#1976D2' },
-    { name: 'Osmanlı', startYear: 1299, endYear: 1922, color: '#388E3C' },
-    { name: 'Cumhuriyet', startYear: 1923, endYear: 2026, color: '#E53935' },
+    { name: 'İlk Çağ', startYear: -2000, endYear: 375, color: '#8D6E63' }, // Yazının icadından Kavimler Göçü'ne
+    { name: 'Orta Çağ', startYear: 375, endYear: 1453, color: '#627BC1' }, // Kavimler Göçü'nden İstanbul'un Fethi'ne
+    { name: 'Yeni Çağ', startYear: 1453, endYear: 1789, color: '#1976D2' }, // İstanbul'un Fethi'nden Fransız İhtilali'ne
+    { name: 'Yakın Çağ', startYear: 1789, endYear: 2026, color: '#E53935' }, // Fransız İhtilali'nden Günümüze
 ];
 
 const TIMELINE_MIN = -1000;

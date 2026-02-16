@@ -1,7 +1,7 @@
 "use client";
 // forcing rebuild
 
-import React, { useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import Map, { Source, Layer, Marker, Popup } from 'react-map-gl/mapbox';
 import { Layers, Plus, Minus, Check, Globe, Map as MapIcon, Moon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -54,12 +54,94 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   // but for MVP we can just import if it's small, or fetch.
   // Let's use simple fetch for now.
 
-  const [geoData, setGeoData] = React.useState<any | null>(null);
+  // Available map years in public/data/historical_maps/
+  const AVAILABLE_MAP_YEARS = [
+    -2000, -1000, -500, -323, -200, 100, 200, 300, 400, 500,
+    600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500,
+    1600, 1700, 1800, 1900, 1994
+  ];
 
+  // Helper: Find closest map year
+  const getClosestMapYear = (year: number) => {
+    return AVAILABLE_MAP_YEARS.reduce((prev, curr) => {
+      return (Math.abs(curr - year) < Math.abs(prev - year) ? curr : prev);
+    });
+  };
+
+  // Helper: Generate consistent color from string
+  const stringToColor = (str: string) => {
+    if (!str) return '#cccccc';
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+    return '#' + '00000'.substring(0, 6 - c.length) + c;
+  };
+
+  const [geoData, setGeoData] = React.useState<any | null>(null);
+  const [worldMapData, setWorldMapData] = React.useState<any | null>(null);
+  const [loadedMapYear, setLoadedMapYear] = React.useState<number | null>(null);
+  const mapCache = React.useRef<{ [key: number]: any }>({});
+
+  // Fetch Full World Map on Year Change
   React.useEffect(() => {
-    fetch('/data/history.json')
+    if (!historyMode) return;
+
+    const targetYear = getClosestMapYear(selectedYear);
+
+    // Avoid re-fetching if already currently loaded
+    if (loadedMapYear === targetYear) return;
+
+    const loadMap = async () => {
+      try {
+        // Check cache first
+        if (mapCache.current[targetYear]) {
+          setWorldMapData(mapCache.current[targetYear]);
+          setLoadedMapYear(targetYear);
+          return;
+        }
+
+        const filename = targetYear < 0 ? `world_bc${Math.abs(targetYear)}.geojson` : `world_${targetYear}.geojson`;
+        console.log(`Loading map: ${filename}`);
+
+        const res = await fetch(`/data/historical_maps/${filename}`);
+        if (!res.ok) throw new Error('Map not found');
+
+        const data = await res.json();
+
+        // Pre-process to add color property based on name
+        data.features = data.features.map((f: any) => {
+          const name = f.properties.NAME || f.properties.name || f.properties.Name || "Unknown";
+          return {
+            ...f,
+            properties: {
+              ...f.properties,
+              // Generate a consistent color
+              generated_color: stringToColor(name),
+              name: name // standardize name key
+            }
+          };
+        });
+
+        mapCache.current[targetYear] = data;
+        setWorldMapData(data);
+        setLoadedMapYear(targetYear);
+
+      } catch (err) {
+        console.error("Failed to load map year:", targetYear, err);
+      }
+    };
+
+    loadMap();
+  }, [selectedYear, historyMode]);
+
+  // Keep the old fetch for legacy support or if we revert
+  React.useEffect(() => {
+    fetch('/public/data/history.json') // Intentionally listing broken path as we moved to new system?
       .then(res => res.json())
-      .then(data => setGeoData(data));
+      .then(data => setGeoData(data)) // Logic for old Turkic-only data
+      .catch(e => console.log("Legacy history.json skipped"));
   }, []);
 
 
@@ -130,13 +212,16 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   }, [selectedYear]);
 
   // Map Style State
-  const [mapStyle, setMapStyle] = React.useState<'dark' | 'physical' | 'political'>('dark');
+  // Default to 'political' (Light) because we apply a CSS sepia filter for the Antique look.
+  // Satellite + Sepia = Muddy. Light + Sepia = Old Paper.
+  const [mapStyle, setMapStyle] = React.useState<'dark' | 'physical' | 'political' | 'satellite'>('political');
   const [isStyleMenuOpen, setIsStyleMenuOpen] = React.useState(false);
 
   const mapStyleUrl = useMemo(() => {
     switch (mapStyle) {
-      case 'physical': return 'mapbox://styles/mapbox/satellite-streets-v12';
+      case 'physical': return 'mapbox://styles/mapbox/outdoors-v12';
       case 'political': return 'mapbox://styles/mapbox/light-v10';
+      case 'satellite': return 'mapbox://styles/mapbox/satellite-streets-v12';
       case 'dark': default: return 'mapbox://styles/mapbox/dark-v11';
     }
   }, [mapStyle]);
@@ -211,7 +296,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
       'fill-opacity': [
         'case',
         ['==', ['get', 'is_active'], 1],
-        0.5,
+        0.2, // Reduced opacity for realistic overlay
         0
       ],
       'fill-opacity-transition': { duration: 500, delay: 0 } // Smooth fade over 500ms
@@ -239,12 +324,13 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
     id: 'states-outline',
     type: 'line',
     paint: {
-      'line-color': '#FFFFFF',
-      'line-width': 1,
+      'line-color': ['get', 'color'], // Use state color for border
+      'line-width': 2,
+      'line-blur': 1, // Soft glow effect
       'line-opacity': [
         'case',
         ['==', ['get', 'is_active'], 1],
-        1,
+        0.8,
         0
       ],
       'line-opacity-transition': { duration: 500 }
@@ -397,6 +483,49 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   const migrationTypeFilter = useMemo(() => ['==', 'type', 'migration'], []);
   const cityTypeFilter = useMemo(() => ['==', 'type', 'city'], []);
 
+  // Helper to hide/show modern layers
+  const updateLayerVisibility = (map: any) => {
+    if (!map || !map.getStyle()) return;
+
+    const style = map.getStyle();
+    if (style && style.layers) {
+      style.layers.forEach((layer: any) => {
+        // Modern Layers to Hide in History Mode
+        const isModernLayer =
+          layer.id.includes('road') ||
+          layer.id.includes('admin') ||
+          layer.id.includes('waterway') ||
+          layer.id.includes('building') ||
+          layer.id.includes('country-label') ||
+          layer.id.includes('state-label') ||
+          layer.id.includes('settlement-label') || // Cities
+          layer.id.includes('poi-label') ||
+          layer.id.includes('airport') ||
+          layer.id.includes('transit');
+
+        if (isModernLayer) {
+          map.setLayoutProperty(layer.id, 'visibility', historyMode ? 'none' : 'visible');
+        }
+
+        // Mute water color - ONLY for fill layers
+        if (layer.id.includes('water') && layer.type === 'fill' && historyMode) {
+          map.setPaintProperty(layer.id, 'fill-color', '#a0a0a0');
+        } else if (layer.id.includes('water') && layer.type === 'fill' && !historyMode) {
+          // Reset water color (approximate default)
+          map.setPaintProperty(layer.id, 'fill-color', '#a0cfdf');
+        }
+      });
+    }
+  };
+
+  // Trigger visibility update when mode changes
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (map) {
+      updateLayerVisibility(map);
+    }
+  }, [historyMode, mapStyle]);
+
   const onMapClick = (event: any) => {
     const feature = event.features?.[0];
     if (feature) {
@@ -418,14 +547,17 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         return; // Stop propagation
       }
 
-      // Fly to the clicked feature (States)
-      if (feature.layer.id === 'states-fill') {
-        mapRef.current?.flyTo({
-          center: event.lngLat,
-          zoom: 7,
-          duration: 1000
-        });
-        onStateClick(feature.properties.name);
+      // Fly to the clicked feature (States) - Supports both legacy and new layers
+      if (feature.layer.id === 'states-fill' || feature.layer.id === 'world-states-fill') {
+        const stateName = feature.properties.name || feature.properties.NAME || feature.properties.Name;
+        if (stateName) {
+          mapRef.current?.flyTo({
+            center: event.lngLat,
+            zoom: 7,
+            duration: 1000
+          });
+          onStateClick(stateName);
+        }
       }
     }
   };
@@ -452,6 +584,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         mapStyle={mapStyleUrl}
         mapboxAccessToken={mapboxToken}
         interactiveLayerIds={[
+          'world-states-fill', // NEW
           'states-fill',
           'cities-point',
           'cities-label',
@@ -483,7 +616,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
               if (placeName) {
                 console.log('📍 Label clicked:', placeName, labelFeature.layer?.id);
 
-                // Determine target coordinates: Use feature geometry if it's a specific Point (more accurate), otherwise click coords
+                // Determine target coordinates
                 let targetCenter: [number, number] = [e.lngLat.lng, e.lngLat.lat];
                 if (labelFeature.geometry?.type === 'Point') {
                   const coords = (labelFeature.geometry as any).coordinates;
@@ -504,9 +637,6 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
                 return;
               }
             }
-
-            // Fallback: Reverse geocode REMOVED as per user request
-            // Clicking on empty space should just pan the map, not open AI panel.
           }
 
           onMapClick(e);
@@ -514,121 +644,61 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         onLoad={() => {
           const map = mapRef.current?.getMap();
           if (!map) return;
-          // Brighten built-in settlement labels
-          const labelLayers = map.getStyle().layers.filter((l: any) =>
-            l.id.includes('settlement-label') ||
-            l.id.includes('settlement-subdivision-label') ||
-            l.id.includes('poi-label')
-          );
-          labelLayers.forEach((l: any) => {
-            try {
-              if (l.type === 'symbol') {
-                map.setPaintProperty(l.id, 'text-color', '#ffffff');
-                map.setPaintProperty(l.id, 'text-opacity', 1);
-                map.setPaintProperty(l.id, 'text-halo-color', '#000000');
-                map.setPaintProperty(l.id, 'text-halo-width', 1.5);
-              }
-            } catch (err) { /* layer may not exist yet */ }
+
+          // Initial check
+          updateLayerVisibility(map);
+
+          // Re-apply on style change
+          map.on('styledata', () => {
+            updateLayerVisibility(map);
           });
         }}
       >
-        {/* Historical State Polygons — ONLY in History Mode */}
-        {historyMode && processedData && (
-          <Source id="history-data" type="geojson" data={processedData}>
-            {/* @ts-ignore */}
-            <Layer {...fillLayer} filter={stateTypeFilter} />
-            {/* @ts-ignore */}
-            <Layer {...lineLayer} filter={stateTypeFilter} />
-            {/* @ts-ignore */}
-            <Layer {...migrationLayer} filter={migrationTypeFilter} />
-            {/* @ts-ignore */}
-            <Layer {...cityLayer} filter={cityTypeFilter} />
-            {/* @ts-ignore */}
-            <Layer {...cityLabelLayer} filter={cityTypeFilter} />
+        {/* Historical State Polygons — FULL WORLD HISTORY MODE */}
+        {historyMode && worldMapData && (
+          <Source id="world-history-data" type="geojson" data={worldMapData}>
+            <Layer
+              id="world-states-fill"
+              type="fill"
+              paint={{
+                'fill-color': ['get', 'generated_color'],
+                'fill-opacity': 0.3, // Light opacity to blend with paper texture
+                'fill-outline-color': '#444' // Darker outline
+              }}
+            />
+            {/* Outline Layer for sharper borders */}
+            <Layer
+              id="world-states-outline"
+              type="line"
+              paint={{
+                'line-color': '#555',
+                'line-width': 0.5,
+                'line-opacity': 0.5
+              }}
+            />
+            {/* Labels for World States */}
+            <Layer
+              id="world-states-label"
+              type="symbol"
+              layout={{
+                'text-field': ['get', 'name'],
+                'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                'text-size': 10,
+                'text-transform': 'uppercase',
+                'text-max-width': 8
+              }}
+              paint={{
+                'text-color': '#333', // Ink color
+                'text-halo-color': '#ebd5b3', // Paper halo
+                'text-halo-width': 1,
+                'text-opacity': 0.7
+              }}
+              minzoom={3}
+            />
           </Source>
         )}
 
-        {/* Administrative Layers (Provinces & Districts) - Only in DEFAULT mode, Modern Era (>= 1923) */}
-        {!historyMode && selectedYear >= 1923 && (
-          <>
-            <Source id="provinces-data" type="geojson" data="https://jmgvwoweldtdonvreesg.supabase.co/storage/v1/object/public/geodata/turkey-provinces.json">
-              <Layer
-                id="provinces-fill"
-                type="fill"
-                paint={{
-                  'fill-color': '#E53935',
-                  'fill-opacity': 0,
-                }}
-              />
-              <Layer
-                id="provinces-outline"
-                type="line"
-                paint={{
-                  'line-color': '#FFFFFF',
-                  'line-width': 0.5,
-                  'line-opacity': 0.8
-                }}
-              />
-              <Layer
-                id="provinces-label"
-                type="symbol"
-                layout={{
-                  'text-field': ['get', 'name'],
-                  'text-size': 10,
-                  'text-transform': 'uppercase',
-                  'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-                  'text-offset': [0, 0]
-                }}
-                paint={{
-                  'text-color': '#ffffff',
-                  'text-opacity': 0.6,
-                  'text-halo-color': '#000000',
-                  'text-halo-width': 1
-                }}
-                minzoom={5}
-                maxzoom={8}
-              />
-            </Source>
-
-            <Source id="districts-data" type="geojson" data="https://jmgvwoweldtdonvreesg.supabase.co/storage/v1/object/public/geodata/turkey-districts.json">
-              <Layer
-                id="districts-fill-click"
-                type="fill"
-                paint={{
-                  'fill-color': '#000000',
-                  'fill-opacity': 0
-                }}
-                minzoom={6}
-              />
-              <Layer
-                id="districts-outline"
-                type="line"
-                paint={{
-                  'line-color': '#FFFFFF',
-                  'line-width': 0.5,
-                  'line-opacity': 0.5
-                }}
-                minzoom={6}
-              />
-              <Layer
-                id="districts-label"
-                type="symbol"
-                layout={{
-                  'text-field': ['get', 'name'],
-                  'text-size': 9,
-                  'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular']
-                }}
-                paint={{
-                  'text-color': '#B3E5FC',
-                  'text-opacity': 0.7
-                }}
-                minzoom={8}
-              />
-            </Source>
-          </>
-        )}
-
-        {/* Migration Route — ONLY in History Mode */}
+        {/* Legacy: Migration Route — ONLY in History Mode */}
         {historyMode && (
           <Source id="migration-route-data" type="geojson" data="/data/migrations.json">
             <Layer
@@ -643,11 +713,38 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
               layout={{
                 'line-join': 'round',
                 'line-cap': 'round',
-                'visibility': (selectedYear >= 800 && selectedYear <= 1200) ? 'visible' : 'none'
+                'visibility': (selectedYear >= 600 && selectedYear <= 1100) ? 'visible' : 'none'
               }}
             />
           </Source>
         )}
+
+        {/* Raster Image Overlays (Historical Maps) */}
+        {historyMode && processedData && processedData.features.map((feature: any) => {
+          if (feature.properties.image_url && feature.properties.coordinates && feature.properties.is_active) {
+            return (
+              <Source
+                key={`image-${feature.id}`}
+                id={`image-source-${feature.id}`}
+                type="image"
+                url={feature.properties.image_url}
+                coordinates={feature.properties.coordinates}
+              >
+                <Layer
+                  id={`image-layer-${feature.id}`}
+                  type="raster"
+                  paint={{
+                    'raster-opacity': 0.8,
+                    'raster-fade-duration': 300
+                  }}
+                />
+              </Source>
+            );
+          }
+          return null;
+        })}
+
+
 
         {/* Trade Routes — ONLY in History Mode */}
         {historyMode && (
@@ -849,26 +946,28 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
       }
 
       {/* Add Place Toggle Button — Admin Only */}
-      {isAdmin && (
-        <div className="absolute top-24 left-4 z-10 flex flex-col gap-2">
-          <button
-            onClick={() => {
-              if (!isAddMode) {
-                setIsAddMode(true);
-                setAddLocation(null);
-              } else {
-                setIsAddMode(false);
-                setAddLocation(null);
-              }
-            }}
-            className={`p-3 rounded-full shadow-lg transition-all ${isAddMode ? 'bg-amber-500 text-black rotate-45' : 'bg-slate-800 text-white hover:bg-slate-700'
-              }`}
-            title={isAddMode ? "Ekleme Modunu Kapat" : "Yeni Yer Ekle"}
-          >
-            <Plus className="w-6 h-6" />
-          </button>
-        </div>
-      )}
+      {
+        isAdmin && (
+          <div className="absolute top-24 left-4 z-10 flex flex-col gap-2">
+            <button
+              onClick={() => {
+                if (!isAddMode) {
+                  setIsAddMode(true);
+                  setAddLocation(null);
+                } else {
+                  setIsAddMode(false);
+                  setAddLocation(null);
+                }
+              }}
+              className={`p-3 rounded-full shadow-lg transition-all ${isAddMode ? 'bg-amber-500 text-black rotate-45' : 'bg-slate-800 text-white hover:bg-slate-700'
+                }`}
+              title={isAddMode ? "Ekleme Modunu Kapat" : "Yeni Yer Ekle"}
+            >
+              <Plus className="w-6 h-6" />
+            </button>
+          </div>
+        )
+      }
 
       {
         isAddMode && (

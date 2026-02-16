@@ -52,16 +52,18 @@ export async function generateHistoryAnalysis(stateName: string, year: number, l
         ${districtContext}
 
         **ÖNEMLİ KURALLAR:**
-        1. Sadece "${year}" yılı ve öncesi hakkında bilgi ver. ASLA gelecekten bahsetme.
-        2. Eğer "${year}" yılı günümüzden sonraysa, günümüzdeki durumu anlat.
-        3. Yanıtı AYRIŞTIRILABİLİR XML formatında ver.
-        
+        1. **DÖNEMSEL İSİM TESPİTİ:** Öncelikle bu konumun ${year} yılındaki ADINI tespit et ve analize bununla başla (Örn: İzmir yerine "Smyrna", Konya yerine "Ikonion"). Başlıkta bu ismi kullan.
+        2. Sadece "${year}" yılı ve o dönemin medeniyeti (Hitit, Roma, Selçuklu vb.) hakkında bilgi ver.
+        3. ASLA gelecekten veya modern Türkiye'den bahsetme (kıyaslama hariç).
+        4. O dönemde şehir yoksa "Bu dönemde yerleşim bulunmamaktadır" de.
+
         **YANIT FORMATI (KESİN UYULACAK):**
 
         <ANALIZ>
-        Buraya tarihçe, etimoloji ve önem hakkında detaylı ansiklopedik metin gelecek.
-        Markdown formatını kullanabilirsin (başlıklar, kalın yazı).
-        Yer adının kökeni ve anlamı hakkında bilgi ver.
+        **Tarihsel İsim:** [Bulunan İsim] (Modern: ${stateName})
+        
+        Buraya tarihçe, etimoloji ve o dönemki önemi hakkında detaylı ansiklopedik metin gelecek.
+        Dönemin hakimi olan devlet/medeniyet bağlamında anlat.
         </ANALIZ>
 
         <DEMOGRAFI>

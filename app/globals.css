@@ -74,6 +74,7 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
@@ -82,9 +83,11 @@ body {
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(100, 116, 139, 0.4);
   border-radius: 2px;
@@ -92,6 +95,20 @@ body {
 
 /* Antique Map Filter (applied to map container in history mode) */
 .antique-map-filter {
-  filter: sepia(0.25) saturate(0.85) brightness(0.95);
-  transition: filter 0.5s ease;
+  filter: sepia(0.6) saturate(0.5) contrast(1.1) brightness(0.9);
+  position: relative;
+}
+
+.antique-map-filter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("https://www.transparenttextures.com/patterns/aged-paper.png");
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 10;
+  mix-blend-mode: multiply;
 }
