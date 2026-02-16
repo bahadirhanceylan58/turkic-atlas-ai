@@ -52,8 +52,15 @@ export default function Home() {
 
   useEffect(() => {
     fetch('/data/history.json')
-      .then(res => res.json())
-      .then(data => setHistoryData(data));
+      .then(res => {
+        if (!res.ok) {
+          console.warn('legacy history.json skipped');
+          return { type: 'FeatureCollection', features: [] };
+        }
+        return res.json();
+      })
+      .then(data => setHistoryData(data))
+      .catch(() => console.warn('history.json not available'));
 
     fetch('https://jmgvwoweldtdonvreesg.supabase.co/storage/v1/object/public/geodata/turkey-districts.json')
       .then(res => res.json())

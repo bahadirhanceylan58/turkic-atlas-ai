@@ -485,11 +485,20 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
 
   // Helper to hide/show modern layers
   const updateLayerVisibility = (map: any) => {
-    if (!map || !map.getStyle()) return;
+    if (!map) return;
+
+    // CRITICAL: Wait for style to fully load before accessing layers
+    try {
+      if (!map.isStyleLoaded()) return;
+    } catch (e) {
+      return; // Style object not available yet
+    }
 
     const style = map.getStyle();
-    if (style && style.layers) {
-      style.layers.forEach((layer: any) => {
+    if (!style || !style.layers) return;
+
+    style.layers.forEach((layer: any) => {
+      try {
         // Modern Layers to Hide in History Mode
         const isModernLayer =
           layer.id.includes('road') ||
@@ -498,7 +507,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           layer.id.includes('building') ||
           layer.id.includes('country-label') ||
           layer.id.includes('state-label') ||
-          layer.id.includes('settlement-label') || // Cities
+          layer.id.includes('settlement-label') ||
           layer.id.includes('poi-label') ||
           layer.id.includes('airport') ||
           layer.id.includes('transit');
@@ -511,17 +520,18 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         if (layer.id.includes('water') && layer.type === 'fill' && historyMode) {
           map.setPaintProperty(layer.id, 'fill-color', '#a0a0a0');
         } else if (layer.id.includes('water') && layer.type === 'fill' && !historyMode) {
-          // Reset water color (approximate default)
           map.setPaintProperty(layer.id, 'fill-color', '#a0cfdf');
         }
-      });
-    }
+      } catch (err) {
+        // Skip layers that can't be modified (e.g., background)
+      }
+    });
   };
 
   // Trigger visibility update when mode changes
   useEffect(() => {
     const map = mapRef.current?.getMap();
-    if (map) {
+    if (map && map.isStyleLoaded()) {
       updateLayerVisibility(map);
     }
   }, [historyMode, mapStyle]);
