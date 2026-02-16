@@ -452,8 +452,6 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           'cities-label',
           'provinces-fill',
           'districts-fill-click',
-          'turkey-villages-circle', // Added Village Layer
-          'turkey-villages-label',  // Added Village Label
           'places-point',
           'places-label'
         ]}
@@ -462,35 +460,71 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
             setAddLocation({ lat: e.lngLat.lat, lng: e.lngLat.lng });
             return;
           }
-          // Custom Village handling inside onMapClick or here?
-          // Actually onMapClick handles the logic if we pass the event.
-          // But we need to make sure onMapClick handles the new layers.
-          // Let's modify onMapClick to handle it, OR handle it here.
-          // Since onMapClick is defined above, let's look at it.
-          // The previous edit inserted logic into interactiveLayerIds which was wrong.
-          // We need to move the logic into onMapClick function definition or here.
 
-          // Let's use the onMapClick function defined above, but we need to update IT.
-          // Wait, I can't update onMapClick easily with replace_file_content if I am here.
-          // So I will implement the logic HERE inline for now to fix the syntax error immediately.
+          // Check for ANY Mapbox label at click point (only when zoomed in enough)
+          const map = mapRef.current?.getMap();
+          const currentZoom = map?.getZoom() || 0;
+          if (map && onPlaceClick && currentZoom >= 8) {
+            // Query ALL rendered features at click point (no layer filter)
+            const allFeatures = map.queryRenderedFeatures(e.point);
 
-          const feature = e.features?.[0];
-          if (feature && (feature.layer?.id === 'turkey-villages-circle' || feature.layer?.id === 'turkey-villages-label')) {
-            console.log("Village Clicked:", feature.properties);
-            const villageName = feature.properties?.name;
-            if (onPlaceClick && villageName) {
-              onPlaceClick({
-                name: villageName,
-                lat: feature.geometry.type === 'Point' ? (feature.geometry as any).coordinates[1] : e.lngLat.lat,
-                lng: feature.geometry.type === 'Point' ? (feature.geometry as any).coordinates[0] : e.lngLat.lng,
-                type: 'village',
-                ...feature.properties
-              });
-              return;
+            // Find the first feature with a name (prefer symbol/label layers)
+            const labelFeature = allFeatures.find((f: any) =>
+              f.layer?.type === 'symbol' && (f.properties?.name || f.properties?.name_tr)
+            );
+
+            if (labelFeature) {
+              const placeName = labelFeature.properties?.name || labelFeature.properties?.name_tr || labelFeature.properties?.name_en;
+              if (placeName) {
+                console.log('📍 Label clicked:', placeName, labelFeature.layer?.id);
+
+                // Determine target coordinates: Use feature geometry if it's a specific Point (more accurate), otherwise click coords
+                let targetCenter: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+                if (labelFeature.geometry?.type === 'Point') {
+                  const coords = (labelFeature.geometry as any).coordinates;
+                  targetCenter = [coords[0], coords[1]];
+                }
+
+                mapRef.current?.flyTo({
+                  center: targetCenter,
+                  zoom: Math.max(currentZoom, 10),
+                  duration: 800
+                });
+                onPlaceClick({
+                  name: placeName,
+                  lat: e.lngLat.lat,
+                  lng: e.lngLat.lng,
+                  type: labelFeature.properties?.class || labelFeature.properties?.type || 'settlement',
+                });
+                return;
+              }
             }
+
+            // Fallback: Reverse geocode REMOVED as per user request
+            // Clicking on empty space should just pan the map, not open AI panel.
           }
 
           onMapClick(e);
+        }}
+        onLoad={() => {
+          const map = mapRef.current?.getMap();
+          if (!map) return;
+          // Brighten built-in settlement labels
+          const labelLayers = map.getStyle().layers.filter((l: any) =>
+            l.id.includes('settlement-label') ||
+            l.id.includes('settlement-subdivision-label') ||
+            l.id.includes('poi-label')
+          );
+          labelLayers.forEach((l: any) => {
+            try {
+              if (l.type === 'symbol') {
+                map.setPaintProperty(l.id, 'text-color', '#ffffff');
+                map.setPaintProperty(l.id, 'text-opacity', 1);
+                map.setPaintProperty(l.id, 'text-halo-color', '#000000');
+                map.setPaintProperty(l.id, 'text-halo-width', 1.5);
+              }
+            } catch (err) { /* layer may not exist yet */ }
+          });
         }}
       >
         {/* Historical State Polygons — ONLY in History Mode */}
@@ -648,59 +682,10 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           </Source>
         )}
 
-        {/* All Turkey Villages Layer — ONLY in Default Mode */}
-        {!historyMode && (
-          <Source id="turkey-villages-data" type="geojson" data="/data/turkey-villages.json">
-            <Layer
-              id="turkey-villages-circle"
-              type="circle"
-              paint={{
-                'circle-radius': [
-                  'interpolate',
-                  ['linear'],
-                  ['zoom'],
-                  6, 1,
-                  10, 3
-                ],
-                'circle-color': '#FFD700',
-                'circle-stroke-width': 1,
-                'circle-stroke-color': '#000000',
-                'circle-opacity': 0.8
-              }}
-              minzoom={6}
-            />
-            <Layer
-              id="turkey-villages-label"
-              type="symbol"
-              layout={{
-                'text-field': ['get', 'name'],
-                'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
-                'text-size': 10,
-                'text-offset': [0, 1.2],
-                'text-anchor': 'top'
-              }}
-              paint={{
-                'text-color': '#FFF',
-                'text-halo-color': '#000',
-                'text-halo-width': 1
-              }}
-              minzoom={10}
-            />
-          </Source>
-        )}
 
 
-        {/* Supabase Markers */}
-        {/* Places Source & Layers (GeoJSON) */}
-        {placesGeoJSON && (
-          // @ts-ignore
-          <Source id="places-source" type="geojson" data={placesGeoJSON as any}>
-            {/* @ts-ignore */}
-            <Layer {...placesPointLayer} />
-            {/* @ts-ignore */}
-            <Layer {...placesLabelLayer} />
-          </Source>
-        )}
+
+        {/* Supabase Markers — hidden, Mapbox built-in labels used instead */}
 
         {/* Selected Place Popup */}
         {selectedPlace && (() => {

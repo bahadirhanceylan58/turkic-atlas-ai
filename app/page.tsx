@@ -437,7 +437,7 @@ export default function Home() {
   };
 
   return (
-    <main className="w-full h-screen relative bg-black overflow-hidden font-sans">
+    <main className="w-full h-[100dvh] fixed inset-0 bg-black overflow-hidden font-sans">
       {/* Map Layer */}
       <MapBlock
         selectedYear={selectedYear}
