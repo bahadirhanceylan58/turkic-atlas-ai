@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import AddPlaceModal from './AddPlaceModal';
 import { motion, AnimatePresence } from 'framer-motion';
 // import type { FeatureCollection } from 'geojson';
-// import 'mapbox-gl/dist/mapbox-gl.css';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface MapBlockProps {
   selectedYear: number;
