@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# generated data
+/public/data/turkey-provinces.json
+/public/data/turkey-districts.json
+/public/data/turkey-villages-raw.json
+
