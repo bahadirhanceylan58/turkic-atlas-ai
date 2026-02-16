@@ -431,7 +431,12 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   };
 
   if (!mapboxToken) {
-    return <div className="text-white p-10">Mapbox Token Missing</div>;
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-red-500 font-bold text-xl p-10 text-center z-50">
+        ⚠️ Mapbox Token Missing<br />
+        <span className="text-sm text-gray-400 mt-2 font-normal">Vercel Environment Variables Missing</span>
+      </div>
+    );
   }
 
   return (
