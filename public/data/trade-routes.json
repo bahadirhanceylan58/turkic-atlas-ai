@@ -1,0 +1,281 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "İpek Yolu (Ana Güzergah)",
+                "type": "trade_route",
+                "startYear": -200,
+                "endYear": 1450,
+                "color": "#FFD700",
+                "description": "Çin'den Roma'ya uzanan kadim ticaret yolu."
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        108.94,
+                        34.26
+                    ],
+                    [
+                        102.63,
+                        36.06
+                    ],
+                    [
+                        93.51,
+                        42.83
+                    ],
+                    [
+                        87.60,
+                        43.79
+                    ],
+                    [
+                        75.99,
+                        41.27
+                    ],
+                    [
+                        71.43,
+                        40.51
+                    ],
+                    [
+                        68.77,
+                        39.65
+                    ],
+                    [
+                        66.97,
+                        39.62
+                    ],
+                    [
+                        62.18,
+                        37.66
+                    ],
+                    [
+                        58.79,
+                        36.21
+                    ],
+                    [
+                        52.53,
+                        35.69
+                    ],
+                    [
+                        47.98,
+                        35.47
+                    ],
+                    [
+                        44.37,
+                        33.31
+                    ],
+                    [
+                        40.19,
+                        37.07
+                    ],
+                    [
+                        36.82,
+                        37.17
+                    ],
+                    [
+                        35.48,
+                        38.72
+                    ],
+                    [
+                        32.86,
+                        39.93
+                    ],
+                    [
+                        30.71,
+                        36.89
+                    ],
+                    [
+                        28.98,
+                        41.01
+                    ],
+                    [
+                        23.73,
+                        37.97
+                    ],
+                    [
+                        12.50,
+                        41.90
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "İpek Yolu (Kuzey Güzergahı)",
+                "type": "trade_route",
+                "startYear": -200,
+                "endYear": 1450,
+                "color": "#FFA500",
+                "description": "Orta Asya bozkırları üzerinden geçen kuzey ticaret yolu."
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        87.60,
+                        43.79
+                    ],
+                    [
+                        76.95,
+                        43.25
+                    ],
+                    [
+                        71.43,
+                        40.51
+                    ],
+                    [
+                        66.97,
+                        41.30
+                    ],
+                    [
+                        61.53,
+                        41.55
+                    ],
+                    [
+                        57.16,
+                        41.75
+                    ],
+                    [
+                        52.28,
+                        40.92
+                    ],
+                    [
+                        49.87,
+                        40.38
+                    ],
+                    [
+                        44.79,
+                        41.72
+                    ],
+                    [
+                        41.69,
+                        44.80
+                    ],
+                    [
+                        40.19,
+                        43.07
+                    ],
+                    [
+                        37.62,
+                        55.75
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Baharat Yolu",
+                "type": "trade_route",
+                "startYear": -300,
+                "endYear": 1500,
+                "color": "#FF6347",
+                "description": "Hindistan ve Güneydoğu Asya'dan Akdeniz'e baharat taşınan deniz ve kara yolu."
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        80.27,
+                        13.08
+                    ],
+                    [
+                        73.86,
+                        15.49
+                    ],
+                    [
+                        60.67,
+                        25.27
+                    ],
+                    [
+                        50.54,
+                        26.23
+                    ],
+                    [
+                        45.02,
+                        29.31
+                    ],
+                    [
+                        44.37,
+                        33.31
+                    ],
+                    [
+                        36.32,
+                        33.89
+                    ],
+                    [
+                        35.51,
+                        33.87
+                    ],
+                    [
+                        34.78,
+                        32.08
+                    ],
+                    [
+                        31.24,
+                        30.05
+                    ],
+                    [
+                        29.92,
+                        31.21
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Kral Yolu (Pers)",
+                "type": "trade_route",
+                "startYear": -500,
+                "endYear": -330,
+                "color": "#9C27B0",
+                "description": "Pers İmparatorluğu'nun Sardes'ten Susa'ya uzanan posta ve ticaret yolu."
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        27.51,
+                        38.47
+                    ],
+                    [
+                        30.29,
+                        38.35
+                    ],
+                    [
+                        32.49,
+                        37.87
+                    ],
+                    [
+                        35.48,
+                        38.72
+                    ],
+                    [
+                        36.82,
+                        37.17
+                    ],
+                    [
+                        40.19,
+                        37.07
+                    ],
+                    [
+                        44.37,
+                        33.31
+                    ],
+                    [
+                        47.98,
+                        35.47
+                    ],
+                    [
+                        48.32,
+                        32.06
+                    ]
+                ]
+            }
+        }
+    ]
+}

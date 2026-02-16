@@ -15,9 +15,13 @@ interface MapBlockProps {
   onStateClick: (stateName: string) => void;
   onPlaceClick?: (place: any) => void;
   focusedLocation?: { lat: number, lng: number } | null;
+  historyMode?: boolean;
+  historicalEvents?: any[];
+  onHistoricalEventClick?: (event: any) => void;
+  isAdmin?: boolean;
 }
 
-const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onPlaceClick, focusedLocation }) => {
+const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onPlaceClick, focusedLocation, historyMode = false, historicalEvents = [], onHistoricalEventClick, isAdmin = false }) => {
   const mapRef = React.useRef<any>(null);
 
   // Manual Entry State
@@ -431,7 +435,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   }
 
   return (
-    <div className="w-full h-full absolute top-0 left-0">
+    <div className={`w-full h-full absolute top-0 left-0 ${historyMode ? 'antique-map-filter' : ''}`}>
       <Map
         ref={mapRef}
         initialViewState={{
@@ -471,7 +475,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           // So I will implement the logic HERE inline for now to fix the syntax error immediately.
 
           const feature = e.features?.[0];
-          if (feature && (feature.layer.id === 'turkey-villages-circle' || feature.layer.id === 'turkey-villages-label')) {
+          if (feature && (feature.layer?.id === 'turkey-villages-circle' || feature.layer?.id === 'turkey-villages-label')) {
             console.log("Village Clicked:", feature.properties);
             const villageName = feature.properties?.name;
             if (onPlaceClick && villageName) {
@@ -489,7 +493,8 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           onMapClick(e);
         }}
       >
-        {processedData && (
+        {/* Historical State Polygons — ONLY in History Mode */}
+        {historyMode && processedData && (
           <Source id="history-data" type="geojson" data={processedData}>
             {/* @ts-ignore */}
             <Layer {...fillLayer} filter={stateTypeFilter} />
@@ -504,16 +509,16 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           </Source>
         )}
 
-        {/* Administrative Layers (Provinces & Districts) - Only for Modern Era (>= 1923) */}
-        {selectedYear >= 1923 && (
+        {/* Administrative Layers (Provinces & Districts) - Only in DEFAULT mode, Modern Era (>= 1923) */}
+        {!historyMode && selectedYear >= 1923 && (
           <>
-            <Source id="provinces-data" type="geojson" data="/data/turkey-provinces.json">
+            <Source id="provinces-data" type="geojson" data="https://jmgvwoweldtdonvreesg.supabase.co/storage/v1/object/public/geodata/turkey-provinces.json">
               <Layer
                 id="provinces-fill"
                 type="fill"
                 paint={{
                   'fill-color': '#E53935',
-                  'fill-opacity': 0, // Explicitly 0 to prevent occlusion
+                  'fill-opacity': 0,
                 }}
               />
               <Layer
@@ -522,10 +527,9 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
                 paint={{
                   'line-color': '#FFFFFF',
                   'line-width': 0.5,
-                  'line-opacity': 0.8 // Increased visibility
+                  'line-opacity': 0.8
                 }}
               />
-              {/* Province Labels */}
               <Layer
                 id="provinces-label"
                 type="symbol"
@@ -547,8 +551,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
               />
             </Source>
 
-            <Source id="districts-data" type="geojson" data="/data/turkey-districts.json">
-              {/* Transparent fill to capture clicks */}
+            <Source id="districts-data" type="geojson" data="https://jmgvwoweldtdonvreesg.supabase.co/storage/v1/object/public/geodata/turkey-districts.json">
               <Layer
                 id="districts-fill-click"
                 type="fill"
@@ -562,9 +565,9 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
                 id="districts-outline"
                 type="line"
                 paint={{
-                  'line-color': '#FFFFFF', // White as requested
-                  'line-width': 0.5, // Thinner for elegance
-                  'line-opacity': 0.5 // Subtle
+                  'line-color': '#FFFFFF',
+                  'line-width': 0.5,
+                  'line-opacity': 0.5
                 }}
                 minzoom={6}
               />
@@ -586,63 +589,105 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           </>
         )}
 
-        {/* Migration Route (1000-1100) */}
-        <Source id="migration-route-data" type="geojson" data="/data/migrations.json">
-          <Layer
-            id="migration-route-line"
-            type="line"
-            paint={{
-              'line-color': '#FFA500',
-              'line-width': 5,
-              'line-dasharray': [2, 1],
-              'line-opacity': 0.8
-            }}
-            layout={{
-              'line-join': 'round',
-              'line-cap': 'round',
-              'visibility': (selectedYear >= 1000 && selectedYear <= 1100) ? 'visible' : 'none'
-            }}
-          />
-        </Source>
+        {/* Migration Route — ONLY in History Mode */}
+        {historyMode && (
+          <Source id="migration-route-data" type="geojson" data="/data/migrations.json">
+            <Layer
+              id="migration-route-line"
+              type="line"
+              paint={{
+                'line-color': '#FFA500',
+                'line-width': 5,
+                'line-dasharray': [2, 1],
+                'line-opacity': 0.8
+              }}
+              layout={{
+                'line-join': 'round',
+                'line-cap': 'round',
+                'visibility': (selectedYear >= 800 && selectedYear <= 1200) ? 'visible' : 'none'
+              }}
+            />
+          </Source>
+        )}
 
-        {/* All Turkey Villages Layer (Auto-Generated) */}
-        <Source id="turkey-villages-data" type="geojson" data="/data/turkey-villages.json">
-          <Layer
-            id="turkey-villages-circle"
-            type="circle"
-            paint={{
-              'circle-radius': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                6, 1,
-                10, 3
-              ],
-              'circle-color': '#FFD700', // Gold color
-              'circle-stroke-width': 1,
-              'circle-stroke-color': '#000000',
-              'circle-opacity': 0.8
-            }}
-            minzoom={6}
-          />
-          <Layer
-            id="turkey-villages-label"
-            type="symbol"
-            layout={{
-              'text-field': ['get', 'name'],
-              'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
-              'text-size': 10,
-              'text-offset': [0, 1.2],
-              'text-anchor': 'top'
-            }}
-            paint={{
-              'text-color': '#FFF',
-              'text-halo-color': '#000',
-              'text-halo-width': 1
-            }}
-            minzoom={10}
-          />
-        </Source>
+        {/* Trade Routes — ONLY in History Mode */}
+        {historyMode && (
+          <Source id="trade-routes-data" type="geojson" data="/data/trade-routes.json">
+            <Layer
+              id="trade-routes-line"
+              type="line"
+              paint={{
+                'line-color': ['get', 'color'],
+                'line-width': 2.5,
+                'line-dasharray': [4, 2],
+                'line-opacity': 0.6
+              }}
+              layout={{
+                'line-join': 'round',
+                'line-cap': 'round'
+              }}
+            />
+            <Layer
+              id="trade-routes-label"
+              type="symbol"
+              layout={{
+                'symbol-placement': 'line-center',
+                'text-field': ['get', 'name'],
+                'text-font': ['Open Sans Italic', 'Arial Unicode MS Regular'],
+                'text-size': 10,
+                'text-allow-overlap': false
+              }}
+              paint={{
+                'text-color': '#FFD700',
+                'text-halo-color': '#000000',
+                'text-halo-width': 1.5,
+                'text-opacity': 0.7
+              }}
+              minzoom={4}
+            />
+          </Source>
+        )}
+
+        {/* All Turkey Villages Layer — ONLY in Default Mode */}
+        {!historyMode && (
+          <Source id="turkey-villages-data" type="geojson" data="/data/turkey-villages.json">
+            <Layer
+              id="turkey-villages-circle"
+              type="circle"
+              paint={{
+                'circle-radius': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  6, 1,
+                  10, 3
+                ],
+                'circle-color': '#FFD700',
+                'circle-stroke-width': 1,
+                'circle-stroke-color': '#000000',
+                'circle-opacity': 0.8
+              }}
+              minzoom={6}
+            />
+            <Layer
+              id="turkey-villages-label"
+              type="symbol"
+              layout={{
+                'text-field': ['get', 'name'],
+                'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+                'text-size': 10,
+                'text-offset': [0, 1.2],
+                'text-anchor': 'top'
+              }}
+              paint={{
+                'text-color': '#FFF',
+                'text-halo-color': '#000',
+                'text-halo-width': 1
+              }}
+              minzoom={10}
+            />
+          </Source>
+        )}
 
 
         {/* Supabase Markers */}
@@ -734,8 +779,8 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
 
       </Map>
 
-      {/* Map Controls (Responsive) */}
-      <div className="absolute flex flex-col gap-2 z-50 top-1/2 right-4 -translate-y-1/2 md:top-auto md:right-auto md:bottom-24 md:left-6 md:translate-y-0">
+      {/* Map Controls (Responsive — adjust position in history mode) */}
+      <div className={`absolute flex flex-col gap-2 z-50 right-4 ${historyMode ? 'top-20 md:top-24' : 'top-1/2 -translate-y-1/2 md:top-auto md:right-auto md:bottom-24 md:left-6 md:translate-y-0'}`}>
 
         {/* Zoom Controls */}
         <div className="flex flex-col bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-lg overflow-hidden shadow-lg">
@@ -813,31 +858,27 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         )
       }
 
-      {/* Add Place Toggle Button */}
-      <div className="absolute top-24 left-4 z-10 flex flex-col gap-2">
-        <button
-          onClick={() => {
-            if (!isAddMode) {
-              // Check for admin/PIN if enabling
-              const pin = prompt("Admin PIN (Varsayılan: 1453):");
-              if (pin === "1453") { // Simple protection
+      {/* Add Place Toggle Button — Admin Only */}
+      {isAdmin && (
+        <div className="absolute top-24 left-4 z-10 flex flex-col gap-2">
+          <button
+            onClick={() => {
+              if (!isAddMode) {
                 setIsAddMode(true);
                 setAddLocation(null);
               } else {
-                if (pin !== null) alert("Hatalı PIN!");
+                setIsAddMode(false);
+                setAddLocation(null);
               }
-            } else {
-              setIsAddMode(false);
-              setAddLocation(null);
-            }
-          }}
-          className={`p-3 rounded-full shadow-lg transition-all ${isAddMode ? 'bg-amber-500 text-black rotate-45' : 'bg-slate-800 text-white hover:bg-slate-700'
-            }`}
-          title={isAddMode ? "Ekleme Modunu Kapat" : "Yeni Yer Ekle (Admin PIN: 1453)"}
-        >
-          {isAddMode ? <Plus className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
-        </button>
-      </div>
+            }}
+            className={`p-3 rounded-full shadow-lg transition-all ${isAddMode ? 'bg-amber-500 text-black rotate-45' : 'bg-slate-800 text-white hover:bg-slate-700'
+              }`}
+            title={isAddMode ? "Ekleme Modunu Kapat" : "Yeni Yer Ekle"}
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        </div>
+      )}
 
       {
         isAddMode && (

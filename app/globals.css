@@ -24,3 +24,74 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* History Timeline Slider */
+.history-timeline-slider {
+  background: transparent;
+}
+
+.history-timeline-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 24px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  cursor: pointer;
+  border: 2px solid #B45309;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+  transition: box-shadow 0.2s;
+}
+
+.history-timeline-slider::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.8);
+}
+
+.history-timeline-slider::-webkit-slider-track {
+  height: 4px;
+  background: rgba(100, 116, 139, 0.3);
+  border-radius: 2px;
+}
+
+.history-timeline-slider::-moz-range-thumb {
+  width: 16px;
+  height: 24px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  cursor: pointer;
+  border: 2px solid #B45309;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+}
+
+.history-timeline-slider::-moz-range-track {
+  height: 4px;
+  background: rgba(100, 116, 139, 0.3);
+  border-radius: 2px;
+}
+
+/* Scrollbar Hide */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 2px;
+}
+
+/* Antique Map Filter (applied to map container in history mode) */
+.antique-map-filter {
+  filter: sepia(0.25) saturate(0.85) brightness(0.95);
+  transition: filter 0.5s ease;
+}

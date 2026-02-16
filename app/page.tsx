@@ -2,14 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { generateHistoryAnalysis, getPlaceNameHistory, PlaceNameEntry } from '@/lib/aiService';
-import { Bot, ChevronRight, X, Search, MapPin, LogIn } from 'lucide-react';
+import { generateHistoryAnalysis, getPlaceNameHistory, generateBattleAnalysis, generateDynastyInfo, PlaceNameEntry } from '@/lib/aiService';
+import { Bot, ChevronRight, X, Search, MapPin, LogIn, LogOut, Clock, Scroll, KeyRound, UserCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AuthModal from '@/components/AuthModal';
+import HistoryModePanel, { HistoricalEvent } from '@/components/HistoryModePanel';
+import HistoryEventCard from '@/components/HistoryEventCard';
 
-import { supabase } from '@/lib/supabase'; // Import Supabase Client
+import { supabase } from '@/lib/supabase';
 
-// Dynamically import MapBlock to avoid SSR issues with Mapbox
 const MapBlock = dynamic(() => import('@/components/MapComponent'), { ssr: false });
 import { findDistrict, GeoJSONCollection } from '@/lib/geoUtils';
 
@@ -31,20 +32,66 @@ export default function Home() {
   const [placeHistory, setPlaceHistory] = useState<PlaceNameEntry[]>([]);
   const [currentPlaceName, setCurrentPlaceName] = useState<PlaceNameEntry | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false); // Mobile search toggle state
-  const [isInfoBoxOpen, setIsInfoBoxOpen] = useState(false); // New state for Left Info Box visibility
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [isInfoBoxOpen, setIsInfoBoxOpen] = useState(false);
+
+  // History Mode State
+  const [isHistoryMode, setIsHistoryMode] = useState(false);
+  const [historicalEvents, setHistoricalEvents] = useState<HistoricalEvent[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<HistoricalEvent | null>(null);
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const [turkicOnly, setTurkicOnly] = useState(false);
+  const [dynastyInfo, setDynastyInfo] = useState<string | null>(null);
+  const [isLoadingDynasty, setIsLoadingDynasty] = useState(false);
+
+  // Admin State
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Auth State
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
-    // Load history data for lookup
     fetch('/data/history.json')
       .then(res => res.json())
       .then(data => setHistoryData(data));
 
-    // Load districts data for PIP lookup
-    fetch('/data/turkey-districts.json')
+    fetch('https://jmgvwoweldtdonvreesg.supabase.co/storage/v1/object/public/geodata/turkey-districts.json')
       .then(res => res.json())
       .then(data => setDistrictsGeoJSON(data))
       .catch(err => console.error("Failed to load districts:", err));
+
+    // Listen to auth state changes
+    if (supabase) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setCurrentUser(session?.user || null);
+      });
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setCurrentUser(session?.user || null);
+      });
+      return () => subscription.unsubscribe();
+    }
+  }, []);
+
+  // Fetch Historical Events from Supabase
+  useEffect(() => {
+    const fetchEvents = async () => {
+      if (!supabase) return;
+      try {
+        const { data, error } = await supabase
+          .from('historical_events')
+          .select('*')
+          .order('year', { ascending: true });
+        if (error) {
+          console.error('Error fetching historical events:', error);
+        } else {
+          setHistoricalEvents(data || []);
+          console.log(`📜 Loaded ${data?.length} historical events`);
+        }
+      } catch (err) {
+        console.error('Unexpected error fetching events:', err);
+      }
+    };
+    fetchEvents();
   }, []);
 
   // Update current place name based on timeline
@@ -186,7 +233,7 @@ export default function Home() {
 
       // Update parsed data into state (merging with existing feature data)
       if (demographicsData || sourcesList.length > 0) {
-        setSelectedFeatureData(prev => ({
+        setSelectedFeatureData((prev: any) => ({
           ...prev,
           demographics: demographicsData || prev?.demographics,
           sources: sourcesList.length > 0 ? sourcesList : prev?.sources
@@ -293,7 +340,7 @@ export default function Home() {
         }
 
         // Update parsed data into state
-        setSelectedFeatureData(prev => ({
+        setSelectedFeatureData((prev: any) => ({
           ...prev,
           demographics: demographicsData || prev?.demographics,
           sources: sourcesList.length > 0 ? sourcesList : prev?.sources
@@ -317,6 +364,78 @@ export default function Home() {
     }
   };
 
+  // History Mode: Event Click Handler
+  const handleHistoricalEventClick = async (event: HistoricalEvent) => {
+    setSelectedEvent(event);
+    setDynastyInfo(null);
+
+    // Fly to event location
+    setFocusedLocation({ lat: event.lat, lng: event.lng });
+
+    // Auto-fetch dynasty info
+    if (event.parties && event.parties.length > 0) {
+      setIsLoadingDynasty(true);
+      try {
+        const info = await generateDynastyInfo(event.parties[0], event.year);
+        setDynastyInfo(info);
+      } catch (err) {
+        console.error('Dynasty info error:', err);
+      } finally {
+        setIsLoadingDynasty(false);
+      }
+    }
+  };
+
+  // History Mode: AI Analyze Event
+  const handleAnalyzeEvent = async (event: HistoricalEvent) => {
+    setSelectedState(event.name);
+    setAiPanelOpen(true);
+    setAiAnalysis('');
+    setIsAnalyzing(true);
+    setActiveTab('analysis');
+    setSelectedEvent(null);
+
+    if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+
+    try {
+      const fullResponse = await generateBattleAnalysis(
+        event.name, event.year, event.parties || [], event.result || ''
+      );
+      setIsAnalyzing(false);
+
+      // Typewriter effect
+      let i = 0;
+      typingIntervalRef.current = setInterval(() => {
+        setAiAnalysis(fullResponse.substring(0, i));
+        i += 2;
+        if (i > fullResponse.length) {
+          if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+        }
+      }, 10);
+
+      // Set feature data for demographics/sources tabs
+      setSelectedFeatureData({
+        name: event.name,
+        type: event.type,
+        sources: event.source ? [event.source] : [],
+        confidence_score: event.importance === 'critical' ? 98 : 85
+      });
+    } catch (error) {
+      console.error(error);
+      setIsAnalyzing(false);
+      setAiAnalysis('Analiz yapılamadı.');
+    }
+  };
+
+  // Filter toggle handler
+  const handleFilterToggle = (filter: string) => {
+    setActiveFilters(prev =>
+      prev.includes(filter)
+        ? prev.filter(f => f !== filter)
+        : [...prev, filter]
+    );
+  };
+
   return (
     <main className="w-full h-screen relative bg-black overflow-hidden font-sans">
       {/* Map Layer */}
@@ -325,6 +444,10 @@ export default function Home() {
         onStateClick={handleStateClick}
         onPlaceClick={handlePlaceClick}
         focusedLocation={focusedLocation}
+        historyMode={isHistoryMode}
+        historicalEvents={historicalEvents}
+        onHistoricalEventClick={handleHistoricalEventClick}
+        isAdmin={isAdmin}
       />
 
       {/* Responsive Header */}
@@ -376,23 +499,94 @@ export default function Home() {
             </form>
           </div>
 
-          {/* Login Button/Icon */}
+          {/* Admin Login */}
           <button
-            onClick={() => setIsAuthModalOpen(true)}
-            className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 hover:border-cyan-500/50 text-white p-2 md:px-6 md:py-2.5 rounded-full transition-all hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] group flex items-center justify-center"
+            onClick={() => {
+              if (isAdmin) {
+                setIsAdmin(false);
+              } else {
+                const pin = prompt('Admin PIN:');
+                if (pin === '1453') {
+                  setIsAdmin(true);
+                } else if (pin !== null) {
+                  alert('Hatalı PIN!');
+                }
+              }
+            }}
+            className={`p-2 rounded-full transition-all backdrop-blur-md border ${isAdmin
+              ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
+              : 'bg-slate-900/80 border-slate-700/50 text-slate-400 hover:text-white'
+              }`}
+            title={isAdmin ? 'Admin Çıkış' : 'Admin Giriş'}
           >
-            {/* Mobile Icon */}
-            <LogIn className="block md:hidden w-5 h-5 text-cyan-400" />
+            <KeyRound className="w-4 h-4 md:w-5 md:h-5" />
+          </button>
 
-            {/* Desktop Text */}
-            <span className="hidden md:block text-sm font-medium bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent group-hover:from-cyan-400 group-hover:to-blue-400 transition-all">
-              Giriş Yap
+          {/* User Auth Area */}
+          {currentUser ? (
+            <div className="flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-2 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-full px-3 py-1.5">
+                <UserCircle className="w-5 h-5 text-cyan-400" />
+                <span className="text-sm text-slate-300 max-w-[120px] truncate">
+                  {currentUser.user_metadata?.username || currentUser.email?.split('@')[0]}
+                </span>
+              </div>
+              <button
+                onClick={async () => {
+                  if (supabase) await supabase.auth.signOut();
+                  setCurrentUser(null);
+                }}
+                className="p-2 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 hover:border-red-500/50 rounded-full transition-all text-slate-400 hover:text-red-400"
+                title="Çıkış Yap"
+              >
+                <LogOut className="w-4 h-4 md:w-5 md:h-5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsAuthModalOpen(true)}
+              className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 hover:border-cyan-500/50 text-white p-2 md:px-6 md:py-2.5 rounded-full transition-all hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] group flex items-center justify-center"
+            >
+              <LogIn className="block md:hidden w-5 h-5 text-cyan-400" />
+              <span className="hidden md:block text-sm font-medium bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent group-hover:from-cyan-400 group-hover:to-blue-400 transition-all">
+                Giriş Yap
+              </span>
+            </button>
+          )}
+
+          {/* History Mode Toggle */}
+          <button
+            onClick={() => {
+              setIsHistoryMode(!isHistoryMode);
+              if (!isHistoryMode) {
+                if (selectedYear > 1923) setSelectedYear(1071);
+              } else {
+                setSelectedYear(2026);
+                setSelectedEvent(null);
+              }
+            }}
+            className={`p-2 md:px-4 md:py-2.5 rounded-full transition-all flex items-center gap-2 backdrop-blur-md border ${isHistoryMode
+              ? 'bg-amber-500/20 border-amber-500/50 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+              : 'bg-slate-900/80 border-slate-700/50 text-slate-300 hover:border-amber-500/30 hover:text-amber-400'
+              }`}
+            title="Tarih Modu"
+          >
+            <Scroll className="w-4 h-4 md:w-5 md:h-5" />
+            <span className="hidden md:block text-sm font-medium">
+              Tarih Modu
             </span>
+            {isHistoryMode && (
+              <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+            )}
           </button>
         </div>
       </header>
 
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={(user) => setCurrentUser(user)}
+      />
 
       {/* AI Intelligence Panel (Sidebar) */}
       <AnimatePresence>
@@ -577,81 +771,107 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* Timeline Control Panel */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl z-40">
-        <div className="flex flex-col items-center">
-          <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600 drop-shadow-glow">
-              {selectedYear < 0 ? `M.Ö. ${Math.abs(selectedYear)}` : selectedYear}
-            </span>
-            <span className="text-[10px] text-slate-400 tracking-widest uppercase">Seçili Dönem</span>
-          </div>
+      {/* History Event Card (overlay, shown when event selected in history mode) */}
+      <AnimatePresence>
+        {isHistoryMode && selectedEvent && (
+          <HistoryEventCard
+            event={selectedEvent}
+            onClose={() => setSelectedEvent(null)}
+            onAnalyze={handleAnalyzeEvent}
+            dynastyInfo={dynastyInfo}
+            isLoadingDynasty={isLoadingDynasty}
+          />
+        )}
+      </AnimatePresence>
 
-          <div className="w-full relative h-10 px-2 mt-1">
-            {/* Slider */}
-            <input
-              type="range"
-              min="-1000"
-              max="2026"
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500 hover:accent-cyan-400 transition-all z-20 relative"
-            />
+      {/* History Mode Panel (replaces normal timeline when active) */}
+      <AnimatePresence>
+        {isHistoryMode && (
+          <HistoryModePanel
+            selectedYear={selectedYear}
+            onYearChange={setSelectedYear}
+            events={historicalEvents}
+            onEventClick={handleHistoricalEventClick}
+            activeFilters={activeFilters}
+            onFilterToggle={handleFilterToggle}
+            turkicOnly={turkicOnly}
+            onTurkicToggle={() => setTurkicOnly(!turkicOnly)}
+          />
+        )}
+      </AnimatePresence>
 
-            {/* Marks - Using absolute positioning for correct alignment */}
-            <div className="absolute top-4 left-2 right-2 h-4 pointer-events-none">
-              {timelineMarks.map((mark) => {
-                // Calculate percentage based on min -1000 and max 2026
-                const min = -1000;
-                const max = 2026;
-                const range = max - min;
-                const percent = ((mark.year - min) / range) * 100;
+      {/* Normal Timeline Control Panel - ONLY in Default Mode */}
+      {!isHistoryMode && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl z-40">
+          <div className="flex flex-col items-center">
+            <div className="flex items-baseline gap-2 mb-1">
+              <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600 drop-shadow-glow">
+                {selectedYear < 0 ? `M.Ö. ${Math.abs(selectedYear)}` : selectedYear}
+              </span>
+              <span className="text-[10px] text-slate-400 tracking-widest uppercase">Seçili Dönem</span>
+            </div>
 
-                return (
-                  <div
-                    key={mark.year}
-                    className="absolute flex flex-col items-center top-0 transform -translate-x-1/2 cursor-pointer pointer-events-auto"
-                    style={{ left: `${percent}%` }}
-                    onClick={() => setSelectedYear(mark.year)}
-                  >
-                    <div className={`w-0.5 h-1.5 mb-1 ${Math.abs(selectedYear - mark.year) < 100 ? 'bg-cyan-400' : 'bg-slate-600'}`} />
-                    <span className={`text-[10px] whitespace-nowrap ${Math.abs(selectedYear - mark.year) < 100 ? 'text-cyan-400 font-bold' : 'text-slate-600 hover:text-slate-400'}`}>
-                      {mark.label}
-                    </span>
-                  </div>
-                );
-              })}
+            <div className="w-full relative h-10 px-2 mt-1">
+              {/* Slider */}
+              <input
+                type="range"
+                min="-1000"
+                max="2026"
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500 hover:accent-cyan-400 transition-all z-20 relative"
+              />
 
-              {/* Dynamic History Markers */}
-              {placeHistory.map((entry, idx) => {
-                const min = -1000;
-                const max = 2026;
-                const range = max - min;
-                // Clamp percentage between 0 and 100
-                const percent = Math.max(0, Math.min(100, ((entry.startYear - min) / range) * 100));
-                const isActive = selectedYear >= entry.startYear && selectedYear <= entry.endYear;
+              {/* Marks */}
+              <div className="absolute top-4 left-2 right-2 h-4 pointer-events-none">
+                {timelineMarks.map((mark) => {
+                  const min = -1000;
+                  const max = 2026;
+                  const range = max - min;
+                  const percent = ((mark.year - min) / range) * 100;
 
-                return (
-                  <div
-                    key={`history-${idx}`}
-                    className="absolute top-[-12px] transform -translate-x-1/2 cursor-pointer group z-30"
-                    style={{ left: `${percent}%` }}
-                    onClick={() => setSelectedYear(entry.startYear)}
-                  >
-                    {/* Marker Dot */}
-                    <div className={`w-2 h-2 rounded-full border border-slate-900 transition-all ${isActive ? 'bg-cyan-400 scale-150 shadow-[0_0_8px_rgba(34,211,238,0.8)]' : 'bg-slate-500 hover:bg-cyan-300'}`} />
-
-                    {/* Tooltip on Hover */}
-                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-slate-600">
-                      {entry.name} ({entry.startYear})
+                  return (
+                    <div
+                      key={mark.year}
+                      className="absolute flex flex-col items-center top-0 transform -translate-x-1/2 cursor-pointer pointer-events-auto"
+                      style={{ left: `${percent}%` }}
+                      onClick={() => setSelectedYear(mark.year)}
+                    >
+                      <div className={`w-0.5 h-1.5 mb-1 ${Math.abs(selectedYear - mark.year) < 100 ? 'bg-cyan-400' : 'bg-slate-600'}`} />
+                      <span className={`text-[10px] whitespace-nowrap ${Math.abs(selectedYear - mark.year) < 100 ? 'text-cyan-400 font-bold' : 'text-slate-600 hover:text-slate-400'}`}>
+                        {mark.label}
+                      </span>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+
+                {/* Dynamic History Markers */}
+                {placeHistory.map((entry, idx) => {
+                  const min = -1000;
+                  const max = 2026;
+                  const range = max - min;
+                  const percent = Math.max(0, Math.min(100, ((entry.startYear - min) / range) * 100));
+                  const isActive = selectedYear >= entry.startYear && selectedYear <= entry.endYear;
+
+                  return (
+                    <div
+                      key={`history-${idx}`}
+                      className="absolute top-[-12px] transform -translate-x-1/2 cursor-pointer group z-30"
+                      style={{ left: `${percent}%` }}
+                      onClick={() => setSelectedYear(entry.startYear)}
+                    >
+                      <div className={`w-2 h-2 rounded-full border border-slate-900 transition-all ${isActive ? 'bg-cyan-400 scale-150 shadow-[0_0_8px_rgba(34,211,238,0.8)]' : 'bg-slate-500 hover:bg-cyan-300'}`} />
+                      <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-slate-600">
+                        {entry.name} ({entry.startYear})
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </main >
   );
 }

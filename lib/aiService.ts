@@ -161,3 +161,97 @@ export async function getPlaceNameHistory(placeName: string): Promise<PlaceNameE
         return [];
     }
 }
+
+// Battle / Treaty Analysis
+export async function generateBattleAnalysis(eventName: string, year: number, parties?: string[], result?: string): Promise<string> {
+    console.log(`Battle Analysis Triggered: ${eventName}`);
+
+    if (!API_KEY) {
+        return "📜 Yapay zeka servisi şu an kullanılamıyor. Lütfen API anahtarını kontrol edin.";
+    }
+
+    try {
+        const genAI = new GoogleGenerativeAI(API_KEY);
+        const model = genAI.getGenerativeModel({
+            model: "gemini-2.0-flash",
+            generationConfig: { maxOutputTokens: 2048, temperature: 0.5 }
+        });
+
+        const partiesContext = parties ? `Taraflar: ${parties.join(' vs ')}` : '';
+        const resultContext = result ? `Sonuç: ${result}` : '';
+
+        const prompt = `
+        Sen Kıdemli bir Askeri Tarihçisin.
+        
+        **Görev:** "${eventName}" (${year}) hakkında detaylı bir askeri/diplomatik analiz yap.
+        ${partiesContext}
+        ${resultContext}
+
+        **YANITINDA ŞUNLARI İÇER:**
+        1. Olayın arka planı ve sebepleri
+        2. Tarafların güçleri ve stratejileri
+        3. Olayın gelişimi (savaş ise cephe hareketleri, anlaşma ise müzakere süreci)
+        4. Sonuçları ve tarihsel önemi
+        5. Türk tarihi açısından değerlendirme
+
+        **FORMAT:** Markdown kullan (başlıklar, kalın yazı). Türkçe yaz. Akademik ama anlaşılır bir dil kullan.
+        Maksimum 500 kelime.
+        `;
+
+        return await retryWithBackoff(async () => {
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            return response.text();
+        });
+
+    } catch (error: any) {
+        if (error.message.includes("429")) {
+            return "⚠️ Sistem şu an çok yoğun. Lütfen 10-15 saniye bekleyip tekrar deneyin.";
+        }
+        console.error("Battle Analysis Error:", error);
+        return `⚠️ Analiz yapılamadı: ${error.message}`;
+    }
+}
+
+// Dynasty / Ruler Info
+export async function generateDynastyInfo(stateName: string, year: number): Promise<string> {
+    console.log(`Dynasty Info Triggered: ${stateName} @ ${year}`);
+
+    if (!API_KEY) return "";
+
+    try {
+        const genAI = new GoogleGenerativeAI(API_KEY);
+        const model = genAI.getGenerativeModel({
+            model: "gemini-2.0-flash",
+            generationConfig: { maxOutputTokens: 512, temperature: 0.3 }
+        });
+
+        const prompt = `
+        "${stateName}" devleti/hanedanlığı hakkında "${year}" yılına odaklanarak kısa bilgi ver.
+
+        İçermesi gerekenler:
+        - ${year} yılındaki hükümdar kim?
+        - Hükümdarın kısa biyografisi (1-2 cümle)
+        - Önceki ve sonraki 2 hükümdar listesi (varsa)
+
+        Format:
+        **Hükümdar (${year}):** [İsim]
+        [Kısa açıklama]
+
+        **Hanedan Sırası:**
+        ... → [Önceki] → **[Mevcut]** → [Sonraki] → ...
+
+        Kısa ve öz tut. Türkçe yaz. Maksimum 150 kelime.
+        `;
+
+        return await retryWithBackoff(async () => {
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            return response.text();
+        });
+
+    } catch (error: any) {
+        console.error("Dynasty Info Error:", error);
+        return "";
+    }
+}
