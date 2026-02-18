@@ -1,44 +1,29 @@
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import fs from "fs";
-import path from "path";
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 
-// Read .env.local manually
-const envPath = path.resolve(process.cwd(), ".env.local");
-let apiKey = "";
+const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-try {
-    const envContent = fs.readFileSync(envPath, "utf8");
-    const match = envContent.match(/NEXT_PUBLIC_GEMINI_API_KEY=(.*)/);
-    if (match && match[1]) {
-        apiKey = match[1].trim();
-    }
-} catch (e) {
-    console.error("Error reading .env.local:", e);
+if (!API_KEY) {
+    console.error("API Key not found in environment");
     process.exit(1);
 }
 
-if (!apiKey) {
-    console.error("API Key not found in .env.local");
-    process.exit(1);
-}
+console.log("Testing API Key:", API_KEY.substring(0, 10) + "...");
 
-console.log("Found API Key:", apiKey.substring(0, 5) + "...");
-console.log("Key Length:", apiKey.length);
-console.log("Key Char Codes:", apiKey.split('').map(c => c.charCodeAt(0)));
-
-const genAI = new GoogleGenerativeAI(apiKey);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-async function run() {
+async function test() {
     try {
-        console.log("Testing Gemini API...");
-        const result = await model.generateContent("Hello, are you working?");
+        const genAI = new GoogleGenerativeAI(API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+        const prompt = "Explain the history of the name 'Adana' briefly in JSON format.";
+        const result = await model.generateContent(prompt);
         const response = await result.response;
         console.log("Response:", response.text());
-        console.log("API seems to be working!");
-    } catch (e) {
-        console.error("API Error:", e);
+    } catch (error) {
+        console.error("API Error:", error);
     }
 }
 
-run();
+test();

@@ -7,8 +7,11 @@ import { Layers, Plus, Minus, Check, Globe, Map as MapIcon, Moon } from 'lucide-
 import { supabase } from '@/lib/supabase';
 import AddPlaceModal from './AddPlaceModal';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getCitiesForYear } from '@/lib/historicalCityNames';
+import { getCitiesForYear, HISTORICAL_CITIES } from '@/lib/historicalCityNames';
+import { useTheme } from '@/components/ThemeProvider';
 import 'mapbox-gl/dist/mapbox-gl.css';
+
+
 
 interface MapBlockProps {
   selectedYear: number;
@@ -144,7 +147,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
 
   // Keep the old fetch for legacy support or if we revert
   React.useEffect(() => {
-    fetch('/public/data/history.json') // Intentionally listing broken path as we moved to new system?
+    fetch('/data/history.json') // Intentionally listing broken path as we moved to new system?
       .then(res => res.json())
       .then(data => setGeoData(data)) // Logic for old Turkic-only data
       .catch(e => console.log("Legacy history.json skipped"));
@@ -154,27 +157,38 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   const [places, setPlaces] = React.useState<any[]>([]);
   const [selectedPlace, setSelectedPlace] = React.useState<any>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
+    const controller = new AbortController();
+
     const fetchPlaces = async () => {
       if (!supabase) return;
       try {
         const { data, error } = await supabase
           .from('places')
-          .select('*');
+          .select('*')
+          .abortSignal(controller.signal);
+
         if (error) {
-          console.error('Error fetching places:', error);
+          // Ignore abort errors
+          if (error.code !== '20' && !error.message.includes("AbortError")) { // 20 is Postgres Abort check? Actually Supabase JS throws object.
+            console.error('Error fetching places:', error.message || error);
+          }
         } else {
           setPlaces(data || []);
-          console.log("🔍 Supabase Veri Kontrolü:");
-          console.log("Toplam Mekan:", data?.length);
-          console.log("Köyler:", data?.filter(p => p.type === 'village').length);
+          console.log("🔍 Supabase Veri Kontrolü: Mekanlar yüklendi.");
         }
-      } catch (err) {
-        console.error('Unexpected error fetching places:', err);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Unexpected error fetching places:', err);
+        }
       }
     };
 
     fetchPlaces();
+
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   // Animation Ref
@@ -185,7 +199,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
     if (selectedYear >= 1000 && selectedYear <= 1100) {
       const animateDashArray = (timestamp: number) => {
         const map = mapRef.current?.getMap();
-        if (!map || !map.getStyle() || !map.getSource('migration-route-data')) {
+        if (!map || !map.isStyleLoaded() || !map.getSource('migration-route-data')) {
           // Wait for map or source to be ready
           animationRef.current = requestAnimationFrame(animateDashArray);
           return;
@@ -217,20 +231,34 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
     };
   }, [selectedYear]);
 
+  // Theme Integration
+  // Theme Integration
+  const { theme } = useTheme();
+
   // Map Style State
-  // Default to 'political' (Light) because we apply a CSS sepia filter for the Antique look.
-  // Satellite + Sepia = Muddy. Light + Sepia = Old Paper.
-  const [mapStyle, setMapStyle] = React.useState<'dark' | 'physical' | 'political' | 'satellite'>('political');
+  // Default to 'political' (Light) or 'dark' based on theme
+  const [mapStyle, setMapStyle] = React.useState<'dark' | 'political' | 'satellite'>('political');
   const [isStyleMenuOpen, setIsStyleMenuOpen] = React.useState(false);
+
+  // Sync map style with theme
+  useEffect(() => {
+    if (historyMode) {
+      setMapStyle('political'); // Force white/light theme in History Mode
+    } else if (theme === 'dark') {
+      setMapStyle('dark');
+    } else {
+      setMapStyle('political'); // Light
+    }
+  }, [theme, historyMode]);
 
   const mapStyleUrl = useMemo(() => {
     switch (mapStyle) {
-      case 'physical': return 'mapbox://styles/mapbox/outdoors-v12';
       case 'political': return 'mapbox://styles/mapbox/light-v10';
       case 'satellite': return 'mapbox://styles/mapbox/satellite-streets-v12';
-      case 'dark': default: return 'mapbox://styles/mapbox/dark-v11';
+      case 'dark': return 'mapbox://styles/mapbox/dark-v11';
+      default: return theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/light-v10';
     }
-  }, [mapStyle]);
+  }, [mapStyle, theme]);
 
   const handleZoomIn = () => {
     mapRef.current?.zoomIn({ duration: 500 });
@@ -567,10 +595,17 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
       if (feature.layer.id === 'states-fill' || feature.layer.id === 'world-states-fill') {
         const stateName = feature.properties.name || feature.properties.NAME || feature.properties.Name;
         if (stateName) {
+          // Try to find a specific coordinate for this state/city name in our historical database
+          // This fixes the issue of clicking "Sivas" and flying to "Tokat" (random point in polygon)
+          const targetCity = HISTORICAL_CITIES.find(c =>
+            c.modernName.toLowerCase() === stateName.toLowerCase() ||
+            c.names.some(n => n.name.toLowerCase() === stateName.toLowerCase())
+          );
+
           mapRef.current?.flyTo({
-            center: event.lngLat,
-            zoom: 7,
-            duration: 1000
+            center: targetCity ? [targetCity.lng, targetCity.lat] : event.lngLat,
+            zoom: targetCity ? 9 : 7, // Zoom in closer if we have a specific city
+            duration: 1500
           });
           onStateClick(stateName);
         }
@@ -580,15 +615,15 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
 
   if (!mapboxToken) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-red-500 font-bold text-xl p-10 text-center z-50">
+      <div className="w-full h-full flex items-center justify-center bg-[var(--background)] text-red-500 font-bold text-xl p-10 text-center z-50">
         ⚠️ Mapbox Token Missing<br />
-        <span className="text-sm text-gray-400 mt-2 font-normal">Vercel Environment Variables Missing</span>
+        <span className="text-sm text-[var(--text-muted)] mt-2 font-normal">Vercel Environment Variables Missing</span>
       </div>
     );
   }
 
   return (
-    <div className={`w-full h-full absolute top-0 left-0 ${historyMode ? 'antique-map-filter' : ''}`}>
+    <div className={`w-full h-full absolute top-0 left-0`}>
       <Map
         ref={mapRef}
         initialViewState={{
@@ -971,6 +1006,14 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           </Source>
         )}
 
+        {/* Manual Entry Marker (Preview) */}
+        {
+          addLocation && (
+            <Marker longitude={addLocation.lng} latitude={addLocation.lat} anchor="bottom">
+              <div className="text-4xl animate-bounce">📍</div>
+            </Marker>
+          )
+        }
       </Map>
 
       {/* Map Controls (Responsive — adjust position in history mode) */}
@@ -1030,12 +1073,12 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
                 </button>
 
                 <button
-                  onClick={() => { setMapStyle('physical'); setIsStyleMenuOpen(false); }}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${mapStyle === 'physical' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-300 hover:bg-slate-800'}`}
+                  onClick={() => { setMapStyle('satellite'); setIsStyleMenuOpen(false); }}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${mapStyle === 'satellite' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-300 hover:bg-slate-800'}`}
                 >
                   <Globe size={16} />
                   <span>Fiziki (Uydu)</span>
-                  {mapStyle === 'physical' && <Check size={14} className="ml-auto" />}
+                  {mapStyle === 'satellite' && <Check size={14} className="ml-auto" />}
                 </button>
               </motion.div>
             )}
@@ -1044,13 +1087,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
       </div>
 
       {/* Manual Entry Marker (Preview) */}
-      {
-        addLocation && (
-          <Marker longitude={addLocation.lng} latitude={addLocation.lat} anchor="bottom">
-            <div className="text-4xl animate-bounce">📍</div>
-          </Marker>
-        )
-      }
+
 
       {/* Add Place Toggle Button — Admin Only */}
       {

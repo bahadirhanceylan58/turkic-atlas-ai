@@ -17,7 +17,7 @@ async function retryWithBackoff<T>(fn: () => Promise<T>, retries = 3, initialDel
     }
 }
 
-export async function generateHistoryAnalysis(stateName: string, year: number, location?: { lat: number, lng: number }, district?: string): Promise<string> {
+export async function generateHistoryAnalysis(stateName: string, year: number, location?: { lat: number, lng: number }, district?: string, knownHistoricalName?: string): Promise<string> {
     console.log("AI Service Triggered");
     console.log("API Key Status:", API_KEY ? "Present" : "Missing");
 
@@ -42,42 +42,53 @@ export async function generateHistoryAnalysis(stateName: string, year: number, l
 
         const currentYear = new Date().getFullYear();
 
+        const isModernEra = year >= 1923;
+        const eraContext = isModernEra
+            ? "Mevcut Türkiye Cumhuriyeti dönemi ve yakın tarih."
+            : "Tarihsel dönem (Modern Türkiye öncesi).";
+
+        // If we know the historical name, enforce it.
+        const nameInstruction = knownHistoricalName
+            ? `1. **DÖNEMSEL İSİM:** Bu yerin ${year} yılındaki adı kesin olarak "**${knownHistoricalName}**" olarak belirlenmiştir. Analiz başlığında ve içinde bu ismi kullan. (Modern: ${stateName})`
+            : `1. **DÖNEMSEL İSİM TESPİTİ:** ${year} yılındaki ADINI tespit et. Başlıkta bu ismi kullan. (Modern isim: ${stateName})`;
+
         const prompt = `
-        Sen Kıdemli bir Tarihçi ve Coğrafyacısın.
+        Sen Kıdemli bir Tarihçi, Sosyolog ve Coğrafyacısın.
         
-        **Görev:** Aşağıdaki konum veya bölge için "${year}" yılına odaklanarak kapsamlı bir analiz yap.
+        **Görev:** Aşağıdaki konum veya bölge için "${year}" yılına (${eraContext}) odaklanarak kapsamlı bir analiz yap.
         
         **Konum:** ${stateName}
         ${locationContext}
         ${districtContext}
 
         **ÖNEMLİ KURALLAR:**
-        1. **DÖNEMSEL İSİM TESPİTİ:** Öncelikle bu konumun ${year} yılındaki ADINI tespit et ve analize bununla başla (Örn: İzmir yerine "Smyrna", Konya yerine "Ikonion"). Başlıkta bu ismi kullan.
-        2. Sadece "${year}" yılı ve o dönemin medeniyeti (Hitit, Roma, Selçuklu vb.) hakkında bilgi ver.
-        3. ASLA gelecekten veya modern Türkiye'den bahsetme (kıyaslama hariç).
-        4. O dönemde şehir yoksa "Bu dönemde yerleşim bulunmamaktadır" de.
+        ${nameInstruction}
+        2. **ZAMAN BAĞLAMI:** 
+           - Eğer yıl 1923 ve sonrası ise: Cumhuriyet dönemi, modern gelişmeler ve güncel durumdan bahset.
+           - Eğer yıl 1923 öncesi ise: O dönemin medeniyeti (Hitit, Roma, Selçuklu, Osmanlı vb.) bağlamında kal. ASLA modern Türkiye'den bahsetme (kıyaslama hariç).
+        3. **GERÇEKÇİLİK:** O dönemde yerleşim yoksa veya çok küçükse bunu dürüstçe belirt. Nüfus verilerini uydurma.
 
         **YANIT FORMATI (KESİN UYULACAK):**
 
         <ANALIZ>
-        **Tarihsel İsim:** [Bulunan İsim] (Modern: ${stateName})
+        **Tarihsel İsim:** ${knownHistoricalName || "[Bulunan İsim]"} (Modern: ${stateName})
         
-        Buraya tarihçe, etimoloji ve o dönemki önemi hakkında detaylı ansiklopedik metin gelecek.
+        Buraya ${year} yılı bağlamında tarihçe, demografik yapı ve önem hakkında ansiklopedik metin gelecek.
         Dönemin hakimi olan devlet/medeniyet bağlamında anlat.
         </ANALIZ>
 
         <DEMOGRAFI>
         {
-          "${year}": "~Tahmini Nüfus",
-          "1927": "Varsa Veri",
-          "2023": "Varsa Veri"
+          "${year}": "Tahmini Nüfus veya 'Bilinmiyor'",
+          "${isModernEra ? '2000' : '1900'}": "Varsa Veri",
+          "Güncel": "Varsa Veri"
         }
-        (Sadece geçerli bir JSON objesi ver. Yorum yapma.)
+        (Sadece geçerli bir JSON objesi ver. Sayıları string olarak yaz, örn: '15.000 (Tahmini)' veya 'Veri Yok'. Asla sayı uydurma.)
         </DEMOGRAFI>
 
         <KAYNAKLAR>
-        - Kaynak 1 (Örn: BOA, Tapu Tahrir Defterleri)
-        - Kaynak 2 (Örn: Kamus-ı Türki)
+        - Kaynak 1 (Örn: TÜİK, BOA, Strabon)
+        - Kaynak 2 (Varsa)
         </KAYNAKLAR>
         `;
 
@@ -122,25 +133,33 @@ export async function getPlaceNameHistory(placeName: string): Promise<PlaceNameE
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         const prompt = `
-        Sen uzman bir etimolog ve tarihçisin. "${placeName}" (Türkiye/Anadolu) şehri veya bölgesi için tarihsel isim değişimlerini JSON formatında listele.
+        Sen akademik düzeyde çalışan bir etimologsun. "${placeName}" (Türkiye/Anadolu) yerleşimi için detaylı bir etimolojik döküm hazırla.
 
-        Kurallar:
-        1. Sadece Anadolu/Türkiye bağlamındaki yerleri dikkate al.
-        2. Bilinen en eski tarihten (M.Ö.) günümüze kadar kronolojik sırala.
-        3. Her dönem için o dönemki ismini, başlangıç-bitiş yılını ve kökenini yaz.
-        4. "notes" kısmında ismin anlamını yaz.
-        5. "source" kısmında bu ismin geçtiği ana kaynağı belirt (Örn: "Strabon, Geographika", "Evliya Çelebi", "Hittite Tablets").
+        **Kurallar:**
+        1. Sadece bilimsel ve tarihsel veriye dayan. Halk etimolojisi (uydurma hikayeler) kullanma.
+        2. Bilinen en eski isminden günümüze kadar kronolojik sırala.
+        3. Her ismin **Kökenini (Dil)**, **Orijinal Yazılışını/Kelime Kökünü** ve **Anlamını** belirt.
+        4. "source" kısmında bu ismin geçtiği **İlk Kaynağı ve Tarihini** belirt (Örn: "MÖ 400, Ksenophon", "1928, Dahiliye Vekaleti").
 
-        JSON Formatı (Dizi):
+        **JSON Formatı (Dizi):**
         [
             {
                 "name": "Mirones", 
                 "startYear": -2000, 
                 "endYear": -1200,
                 "language": "Hititçe",
-                "meaning": "Güzel Su",
-                "notes": "Hitit tabletlerinde geçen ilk isim.",
-                "source": "Kültepe Tabletleri"
+                "meaning": "Güzel Su / Akarsu Yatağı",
+                "notes": "Miron-as kökünden türediği düşünülmektedir.",
+                "source": "Kültepe Tabletleri (MÖ 19. yy)"
+            },
+            {
+                "name": "Smyrna",
+                "startYear": -1000,
+                "endYear": 1930,
+                "language": "Eski Yunanca",
+                "meaning": "Mür (Reçine)",
+                "notes": "Amazon kraliçesi Smyrna'dan gelmez; Sami dillerinden ödünçlenmiş olabilir.",
+                "source": "Herodotos (MÖ 5. yy)"
             }
         ]
         

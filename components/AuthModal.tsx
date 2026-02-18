@@ -133,15 +133,15 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuccess })
                     initial={{ scale: 0.9, opacity: 0, y: 20 }}
                     animate={{ scale: 1, opacity: 1, y: 0 }}
                     exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                    className="relative w-full max-w-md bg-slate-900/90 border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl"
+                    className="relative w-full max-w-md bg-[var(--panel-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl"
                 >
                     {/* Header & Tabs */}
-                    <div className="flex flex-col border-b border-slate-700/50">
+                    <div className="flex flex-col border-b border-[var(--border-color)]">
                         <div className="flex justify-between items-center p-4">
-                            <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+                            <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[var(--accent-primary)] to-blue-500">
                                 {activeTab === 'login' ? 'Giriş Yap' : 'Kayıt Ol'}
                             </h2>
-                            <button onClick={onClose} className="p-1 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
+                            <button onClick={onClose} className="p-1 hover:bg-[var(--surface-bg)] rounded-full transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                                 <X size={20} />
                             </button>
                         </div>
@@ -149,20 +149,20 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuccess })
                         <div className="flex">
                             <button
                                 onClick={() => handleTabChange('login')}
-                                className={`flex-1 py-3 text-sm font-medium transition-colors relative ${activeTab === 'login' ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'}`}
+                                className={`flex-1 py-3 text-sm font-medium transition-colors relative ${activeTab === 'login' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
                             >
                                 Giriş
                                 {activeTab === 'login' && (
-                                    <motion.div layoutId="authTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400" />
+                                    <motion.div layoutId="authTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-primary)]" />
                                 )}
                             </button>
                             <button
                                 onClick={() => handleTabChange('register')}
-                                className={`flex-1 py-3 text-sm font-medium transition-colors relative ${activeTab === 'register' ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'}`}
+                                className={`flex-1 py-3 text-sm font-medium transition-colors relative ${activeTab === 'register' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
                             >
                                 Kayıt Ol
                                 {activeTab === 'register' && (
-                                    <motion.div layoutId="authTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400" />
+                                    <motion.div layoutId="authTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-primary)]" />
                                 )}
                             </button>
                         </div>
@@ -177,7 +177,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuccess })
                                     initial={{ opacity: 0, y: -10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -10 }}
-                                    className="flex items-center gap-2 p-3 mb-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm"
+                                    className="flex items-center gap-2 p-3 mb-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm"
                                 >
                                     <AlertCircle size={16} className="flex-shrink-0" />
                                     {error}
@@ -192,7 +192,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuccess })
                                     initial={{ opacity: 0, y: -10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -10 }}
-                                    className="flex items-center gap-2 p-3 mb-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-sm"
+                                    className="flex items-center gap-2 p-3 mb-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-500 text-sm"
                                 >
                                     <CheckCircle size={16} className="flex-shrink-0" />
                                     {success}
@@ -204,14 +204,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuccess })
 
                             {activeTab === 'register' && (
                                 <div className="space-y-1">
-                                    <label className="text-xs text-slate-400 ml-1">Kullanıcı Adı</label>
+                                    <label className="text-xs text-[var(--text-secondary)] ml-1">Kullanıcı Adı</label>
                                     <div className="relative">
-                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={18} />
                                         <input
                                             type="text"
                                             value={username}
                                             onChange={(e) => setUsername(e.target.value)}
-                                            className="w-full bg-slate-800/50 border border-slate-700 rounded-lg py-2.5 pl-10 pr-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+                                            className="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-lg py-2.5 pl-10 pr-4 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] transition-all"
                                             placeholder="kagan_1453"
                                         />
                                     </div>
@@ -219,31 +219,31 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuccess })
                             )}
 
                             <div className="space-y-1">
-                                <label className="text-xs text-slate-400 ml-1">E-posta</label>
+                                <label className="text-xs text-[var(--text-secondary)] ml-1">E-posta</label>
                                 <div className="relative">
-                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={18} />
                                     <input
                                         type="email"
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         required
-                                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg py-2.5 pl-10 pr-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+                                        className="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-lg py-2.5 pl-10 pr-4 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] transition-all"
                                         placeholder="ornek@turkic-atlas.ai"
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-xs text-slate-400 ml-1">Şifre</label>
+                                <label className="text-xs text-[var(--text-secondary)] ml-1">Şifre</label>
                                 <div className="relative">
-                                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={18} />
                                     <input
                                         type="password"
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
                                         required
                                         minLength={6}
-                                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg py-2.5 pl-10 pr-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+                                        className="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-lg py-2.5 pl-10 pr-4 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] transition-all"
                                         placeholder="••••••••"
                                     />
                                 </div>

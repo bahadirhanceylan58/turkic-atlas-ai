@@ -3,13 +3,19 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { generateHistoryAnalysis, getPlaceNameHistory, generateBattleAnalysis, generateDynastyInfo, PlaceNameEntry } from '@/lib/aiService';
-import { Bot, ChevronRight, X, Search, MapPin, LogIn, LogOut, Clock, Scroll, KeyRound, UserCircle } from 'lucide-react';
+import { HISTORICAL_CITIES } from '@/lib/historicalCityNames';
+import { getStateData } from '@/lib/historicalStateData';
+
+import { MapPin, Search, Calendar, ChevronLeft, ChevronRight, X, Play, Pause, FastForward, Rewind, Layers, Settings, Globe, Info, Sparkles, BookOpen, Users, ScrollText, Music, Volume2, VolumeX, Maximize2, Minimize2, Share2, Download, AlertCircle, LogIn, LogOut, UserCircle, Bot, Clock, Scroll, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AuthModal from '@/components/AuthModal';
 import HistoryModePanel, { HistoricalEvent } from '@/components/HistoryModePanel';
+import PlaceDetailsPanel from '@/components/PlaceDetailsPanel';
 import HistoryEventCard from '@/components/HistoryEventCard';
 
 import { supabase } from '@/lib/supabase';
+import { useTheme } from '@/components/ThemeProvider';
+import { Moon, Sun } from 'lucide-react';
 
 const MapBlock = dynamic(() => import('@/components/MapComponent'), { ssr: false });
 import { findDistrict, GeoJSONCollection } from '@/lib/geoUtils';
@@ -49,6 +55,7 @@ export default function Home() {
 
   // Auth State
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     fetch('/data/history.json')
@@ -79,26 +86,41 @@ export default function Home() {
     }
   }, []);
 
+
+
   // Fetch Historical Events from Supabase
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchEvents = async () => {
       if (!supabase) return;
       try {
         const { data, error } = await supabase
           .from('historical_events')
           .select('*')
-          .order('year', { ascending: true });
+          .order('year', { ascending: true })
+          .abortSignal(controller.signal);
+
         if (error) {
-          console.error('Error fetching historical events:', error);
+          // Ignore abort errors
+          if (!error.message.includes("AbortError")) {
+            console.error('Error fetching historical events:', error.message);
+          }
         } else {
           setHistoricalEvents(data || []);
           console.log(`📜 Loaded ${data?.length} historical events`);
         }
-      } catch (err) {
-        console.error('Unexpected error fetching events:', err);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Unexpected error fetching events:', err);
+        }
       }
     };
     fetchEvents();
+
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   // Update current place name based on timeline
@@ -158,9 +180,18 @@ export default function Home() {
             setFocusedLocation({ lat, lng });
           }
         } else {
-          // Optional: Show "Not found" toast or alert
-          console.log("Place not found in DB");
-          // alert("Yer bulunamadı!"); // Uncomment if you want a popup
+          // --- Fallback: Check local HISTORICAL_CITIES ---
+          const localCity = HISTORICAL_CITIES.find(c =>
+            c.modernName.toLocaleLowerCase('tr').includes(searchQuery.toLocaleLowerCase('tr')) ||
+            c.names.some(n => n.name.toLocaleLowerCase('tr').includes(searchQuery.toLocaleLowerCase('tr')))
+          );
+
+          if (localCity) {
+            console.log("📍 Found in local HISTORICAL_CITIES:", localCity.modernName);
+            setFocusedLocation({ lat: localCity.lat, lng: localCity.lng });
+          } else {
+            console.log("Place not found in DB or Local Data");
+          }
         }
       }
     } catch (err) {
@@ -289,6 +320,18 @@ export default function Home() {
 
     // Generate Analysis or use Description
     try {
+      // Fetch historical names (Etymology Dictionary) for this place
+      // This populates the "Nişanyan Dictionary" view
+      if (place.name) {
+        try {
+          const history = await getPlaceNameHistory(place.name);
+          setPlaceHistory(history);
+          setCurrentPlaceName(history.find(h => h.startYear <= selectedYear && h.endYear >= selectedYear) || null);
+        } catch (err) {
+          console.error("Failed to fetch etymology", err);
+        }
+      }
+
       if (placeInfo.description) {
         // Typewriter effect for existing description
         const analysis = placeInfo.description;
@@ -315,7 +358,29 @@ export default function Home() {
           console.log(`District lookup for ${place.name}: ${district}`);
         }
 
-        const fullResponse = await generateHistoryAnalysis(place.name, selectedYear, location, district);
+        // Determine correct historical name to guide AI
+        let historicalName: string | undefined;
+
+        // 1. Check if we have a currently selected historical period name (from Search/Stepper)
+        // AND if it matches the place we are clicking (if place.name is the same modern name)
+        if (currentPlaceName && place.name === searchQuery) {
+          historicalName = currentPlaceName.name;
+        }
+
+        // 2. Check if the place object itself has an etymology chain (from Map Data)
+        else if (place.etymology_chain || place.properties?.etymology_chain) {
+          const chain = place.etymology_chain || place.properties?.etymology_chain;
+          if (Array.isArray(chain)) {
+            const match = chain
+              .sort((a: any, b: any) => b.year - a.year) // Sort descending
+              .find((item: any) => item.year <= selectedYear);
+            if (match) historicalName = match.name;
+          }
+        }
+
+        console.log(`AI Analysis using enforced name: ${historicalName} for year ${selectedYear}`);
+
+        const fullResponse = await generateHistoryAnalysis(place.name, selectedYear, location, district, historicalName);
         setIsAnalyzing(false);
 
         // Parse XML Sections
@@ -331,9 +396,11 @@ export default function Home() {
         let demographicsData = null;
         if (demografiText) {
           try {
-            demographicsData = JSON.parse(demografiText);
+            // Clean markdown code blocks if present
+            const cleanJson = demografiText.replace(/```json/g, '').replace(/```/g, '').trim();
+            demographicsData = JSON.parse(cleanJson);
           } catch (e) {
-            console.error("Failed to parse demographics JSON", e);
+            console.error("Failed to parse demographics JSON", e, demografiText);
           }
         }
 
@@ -444,7 +511,7 @@ export default function Home() {
   };
 
   return (
-    <main className="w-full h-[100dvh] fixed inset-0 bg-black overflow-hidden font-sans">
+    <main className="w-full h-[100dvh] fixed inset-0 bg-[var(--background)] overflow-hidden font-sans">
       {/* Map Layer */}
       <MapBlock
         selectedYear={selectedYear}
@@ -465,10 +532,10 @@ export default function Home() {
           animate={{ opacity: 1, x: 0 }}
           className="flex flex-col pointer-events-auto"
         >
-          <h1 className="text-lg md:text-xl font-bold text-white tracking-wider font-orbitron">
-            TURKIC <span className="text-cyan-400">ATLAS</span>
+          <h1 className="text-lg md:text-xl font-bold text-[var(--text-primary)] tracking-wider font-orbitron">
+            TURKIC <span className="text-[var(--accent-primary)]">ATLAS</span>
           </h1>
-          <span className="text-[8px] md:text-[10px] text-slate-400 tracking-[0.2em] uppercase">AI Powered History</span>
+          <span className="text-[8px] md:text-[10px] text-[var(--text-muted)] tracking-[0.2em] uppercase">AI Powered History</span>
         </motion.div>
 
         {/* Right Side Actions */}
@@ -478,7 +545,7 @@ export default function Home() {
             {/* Mobile Toggle Button */}
             <button
               onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
-              className="md:hidden bg-slate-900/80 p-2 rounded-full text-slate-400 border border-slate-700 backdrop-blur-md"
+              className="md:hidden bg-[var(--panel-bg)] p-2 rounded-full text-[var(--text-muted)] border border-[var(--border-color)] backdrop-blur-md"
             >
               {mobileSearchOpen ? <X size={20} /> : <Search size={20} />}
             </button>
@@ -489,17 +556,17 @@ export default function Home() {
               className={`${mobileSearchOpen ? 'block' : 'hidden'} md:block md:w-80 lg:w-96 relative group`}
             >
               <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                <Search className={`w-4 h-4 ${isSearching ? 'text-cyan-400 animate-pulse' : 'text-slate-400'}`} />
+                <Search className={`w-4 h-4 ${isSearching ? 'text-[var(--accent-primary)] animate-pulse' : 'text-[var(--text-muted)]'}`} />
               </div>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Şehir veya bölge adı yazın..."
-                className="w-full bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white text-sm rounded-full py-2.5 pl-10 pr-4 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all placeholder:text-slate-500 shadow-lg"
+                className="w-full bg-[var(--input-bg)] backdrop-blur-md border border-[var(--border-color)] text-[var(--text-primary)] text-sm rounded-full py-2.5 pl-10 pr-4 focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] transition-all placeholder:text-[var(--text-muted)] shadow-lg"
               />
               {placeHistory.length > 0 && (
-                <div className="absolute top-1 right-1 px-2 py-1.5 rounded-full text-[10px] bg-slate-800 text-cyan-400 border border-slate-700">
+                <div className="absolute top-1 right-1 px-2 py-1.5 rounded-full text-[10px] bg-[var(--badge-bg)] text-[var(--accent-primary)] border border-[var(--border-color)]">
                   {placeHistory.length}
                 </div>
               )}
@@ -512,7 +579,7 @@ export default function Home() {
               onClick={() => setIsAdmin(!isAdmin)}
               className={`p-2 rounded-full transition-all backdrop-blur-md border ${isAdmin
                 ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
-                : 'bg-slate-900/80 border-slate-700/50 text-slate-400 hover:text-white'
+                : 'bg-[var(--panel-bg)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               title={isAdmin ? 'Admin Çıkış' : 'Admin Modu'}
             >
@@ -523,9 +590,9 @@ export default function Home() {
           {/* User Auth Area */}
           {currentUser ? (
             <div className="flex items-center gap-2">
-              <div className="hidden md:flex items-center gap-2 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-full px-3 py-1.5">
-                <UserCircle className="w-5 h-5 text-cyan-400" />
-                <span className="text-sm text-slate-300 max-w-[120px] truncate">
+              <div className="hidden md:flex items-center gap-2 bg-[var(--panel-bg)] backdrop-blur-md border border-[var(--border-color)] rounded-full px-3 py-1.5">
+                <UserCircle className="w-5 h-5 text-[var(--accent-primary)]" />
+                <span className="text-sm text-[var(--text-secondary)] max-w-[120px] truncate">
                   {currentUser.user_metadata?.username || currentUser.email?.split('@')[0]}
                 </span>
               </div>
@@ -534,7 +601,7 @@ export default function Home() {
                   if (supabase) await supabase.auth.signOut();
                   setCurrentUser(null);
                 }}
-                className="p-2 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 hover:border-red-500/50 rounded-full transition-all text-slate-400 hover:text-red-400"
+                className="p-2 bg-[var(--panel-bg)] backdrop-blur-md border border-[var(--border-color)] hover:border-red-500/50 rounded-full transition-all text-[var(--text-muted)] hover:text-red-400"
                 title="Çıkış Yap"
               >
                 <LogOut className="w-4 h-4 md:w-5 md:h-5" />
@@ -543,10 +610,10 @@ export default function Home() {
           ) : (
             <button
               onClick={() => setIsAuthModalOpen(true)}
-              className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 hover:border-cyan-500/50 text-white p-2 md:px-6 md:py-2.5 rounded-full transition-all hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] group flex items-center justify-center"
+              className="bg-[var(--panel-bg)] backdrop-blur-md border border-[var(--border-color)] hover:border-[var(--accent-primary)] text-[var(--text-primary)] p-2 md:px-6 md:py-2.5 rounded-full transition-all hover:shadow-[0_0_15px_var(--accent-glow)] group flex items-center justify-center"
             >
-              <LogIn className="block md:hidden w-5 h-5 text-cyan-400" />
-              <span className="hidden md:block text-sm font-medium bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent group-hover:from-cyan-400 group-hover:to-blue-400 transition-all">
+              <LogIn className="block md:hidden w-5 h-5 text-[var(--accent-primary)]" />
+              <span className="hidden md:block text-sm font-medium bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)] bg-clip-text text-transparent group-hover:from-[var(--accent-primary)] group-hover:to-blue-400 transition-all">
                 Giriş Yap
               </span>
             </button>
@@ -564,8 +631,8 @@ export default function Home() {
               }
             }}
             className={`p-2 md:px-4 md:py-2.5 rounded-full transition-all flex items-center gap-2 backdrop-blur-md border ${isHistoryMode
-              ? 'bg-amber-500/20 border-amber-500/50 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
-              : 'bg-slate-900/80 border-slate-700/50 text-slate-300 hover:border-amber-500/30 hover:text-amber-400'
+              ? 'bg-amber-500/20 border-amber-500/50 text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+              : 'bg-[var(--panel-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-amber-500/30 hover:text-amber-500'
               }`}
             title="Tarih Modu"
           >
@@ -574,8 +641,17 @@ export default function Home() {
               Tarih Modu
             </span>
             {isHistoryMode && (
-              <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+              <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
             )}
+          </button>
+
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 md:px-3 md:py-2.5 rounded-full transition-all flex items-center gap-2 backdrop-blur-md border bg-[var(--panel-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-primary)]"
+            title={theme === 'dark' ? 'Aydınlık Mod' : 'Karanlık Mod'}
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4 md:w-5 md:h-5" /> : <Moon className="w-4 h-4 md:w-5 md:h-5" />}
           </button>
         </div>
       </header>
@@ -593,16 +669,16 @@ export default function Home() {
             initial={{ x: 400 }}
             animate={{ x: 0 }}
             exit={{ x: 400 }}
-            className="absolute top-0 right-0 w-96 h-full bg-slate-900/90 backdrop-blur-md border-l border-slate-700 p-6 shadow-2xl z-50 text-white"
+            className="absolute top-0 right-0 w-96 h-full bg-[var(--panel-bg)] backdrop-blur-md border-l border-[var(--border-color)] p-6 shadow-2xl z-50 text-[var(--text-primary)]"
           >
-            <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-4">
+            <div className="flex justify-between items-center mb-4 border-b border-[var(--border-color)] pb-4">
               <div className="flex items-center gap-2">
-                <Bot className="text-cyan-400" size={24} />
-                <h2 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+                <Bot className="text-[var(--accent-primary)]" size={24} />
+                <h2 className="text-xl font-bold bg-gradient-to-r from-[var(--accent-primary)] to-blue-500 bg-clip-text text-transparent">
                   Anadolu Coğrafi Hafıza Arşivi
                 </h2>
               </div>
-              <button onClick={() => setAiPanelOpen(false)} className="hover:bg-slate-700 p-1 rounded transition-colors">
+              <button onClick={() => setAiPanelOpen(false)} className="hover:bg-[var(--surface-bg)] p-1 rounded transition-colors text-[var(--text-secondary)]">
                 <X size={20} />
               </button>
             </div>
@@ -611,32 +687,44 @@ export default function Home() {
               <div className="flex flex-col h-[calc(100%-80px)]">
                 {/* Header Section */}
                 <div className="mb-4">
-                  <h3 className="text-2xl font-bold text-white mb-1">{selectedState}</h3>
+                  <div className="flex items-center gap-3 mb-2">
+                    {(() => {
+                      const stateData = getStateData(selectedState);
+                      return stateData?.flagUrl ? (
+                        <img
+                          src={stateData.flagUrl}
+                          alt={selectedState}
+                          className="w-16 h-10 object-cover rounded shadow-md border border-[var(--border-color)]"
+                        />
+                      ) : null;
+                    })()}
+                    <h3 className="text-2xl font-bold text-[var(--text-primary)]">{selectedState}</h3>
+                  </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-cyan-400 font-mono">{selectedYear} Dönemi</span>
-                    <div className="flex items-center gap-1 text-xs bg-slate-800 px-2 py-1 rounded border border-green-900/50">
-                      <span className="text-green-400">●</span> Güven: {selectedFeatureData?.confidence_score || 95}%
+                    <span className="text-sm text-[var(--accent-primary)] font-mono">{selectedYear} Dönemi</span>
+                    <div className="flex items-center gap-1 text-xs bg-[var(--surface-bg)] px-2 py-1 rounded border border-[var(--border-color)]">
+                      <span className="text-green-500">●</span> <span className="text-[var(--text-secondary)]">Güven: {selectedFeatureData?.confidence_score || 95}%</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b border-slate-700 mb-4">
+                <div className="flex border-b border-[var(--border-color)] mb-4">
                   <button
                     onClick={() => setActiveTab('analysis')}
-                    className={`flex-1 pb-2 text-sm font-medium transition-colors ${activeTab === 'analysis' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:text-slate-200'}`}
+                    className={`flex-1 pb-2 text-sm font-medium transition-colors ${activeTab === 'analysis' ? 'text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                   >
                     Analiz
                   </button>
                   <button
                     onClick={() => setActiveTab('demographics')}
-                    className={`flex-1 pb-2 text-sm font-medium transition-colors ${activeTab === 'demographics' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:text-slate-200'}`}
+                    className={`flex-1 pb-2 text-sm font-medium transition-colors ${activeTab === 'demographics' ? 'text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                   >
                     Demografi
                   </button>
                   <button
                     onClick={() => setActiveTab('sources')}
-                    className={`flex-1 pb-2 text-sm font-medium transition-colors ${activeTab === 'sources' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:text-slate-200'}`}
+                    className={`flex-1 pb-2 text-sm font-medium transition-colors ${activeTab === 'sources' ? 'text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                   >
                     Kaynaklar
                   </button>
@@ -644,19 +732,19 @@ export default function Home() {
 
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                  <div className="bg-slate-800/40 p-4 rounded-lg border border-slate-700/50 min-h-[200px]">
+                  <div className="bg-[var(--surface-bg)] p-4 rounded-lg border border-[var(--border-color)] min-h-[200px]">
                     {activeTab === 'analysis' && (
                       isAnalyzing ? (
-                        <div className="flex flex-col items-center justify-center py-8 gap-3 text-cyan-400">
+                        <div className="flex flex-col items-center justify-center py-8 gap-3 text-[var(--accent-primary)]">
                           <div className="flex gap-1">
-                            <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" />
-                            <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce delay-75" />
-                            <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce delay-150" />
+                            <div className="w-2 h-2 bg-[var(--accent-primary)] rounded-full animate-bounce" />
+                            <div className="w-2 h-2 bg-[var(--accent-primary)] rounded-full animate-bounce delay-75" />
+                            <div className="w-2 h-2 bg-[var(--accent-primary)] rounded-full animate-bounce delay-150" />
                           </div>
                           <span className="text-xs font-mono animate-pulse">Akademik Kaynaklar Taranıyor (BOA, DLT)...</span>
                         </div>
                       ) : (
-                        <div className="text-slate-300 text-sm leading-relaxed space-y-4 font-serif">
+                        <div className="text-[var(--text-secondary)] text-sm leading-relaxed space-y-4 font-serif">
                           <div className="whitespace-pre-wrap">{aiAnalysis}</div>
                         </div>
                       )
@@ -666,13 +754,13 @@ export default function Home() {
                       <div className="space-y-4">
                         {selectedFeatureData?.demographics ? (
                           Object.entries(selectedFeatureData.demographics).map(([year, pop]: [string, any]) => (
-                            <div key={year} className="flex justify-between items-center border-b border-slate-700/50 pb-2 last:border-0">
-                              <span className="text-cyan-400 font-mono text-sm">{year}</span>
-                              <span className="text-slate-200 text-sm">{pop}</span>
+                            <div key={year} className="flex justify-between items-center border-b border-[var(--border-color)] pb-2 last:border-0">
+                              <span className="text-[var(--accent-primary)] font-mono text-sm">{year}</span>
+                              <span className="text-[var(--text-primary)] text-sm">{pop}</span>
                             </div>
                           ))
                         ) : (
-                          <div className="text-slate-500 text-sm italic text-center py-4">Bu dönem/bölge için doğrulanmış demografik veri bulunamadı.</div>
+                          <div className="text-[var(--text-muted)] text-sm italic text-center py-4">Bu dönem/bölge için doğrulanmış demografik veri bulunamadı.</div>
                         )}
                       </div>
                     )}
@@ -681,13 +769,13 @@ export default function Home() {
                       <ul className="space-y-2">
                         {selectedFeatureData?.sources ? (
                           selectedFeatureData.sources.map((source: string, idx: number) => (
-                            <li key={idx} className="flex gap-2 text-sm text-slate-300">
-                              <span className="text-cyan-500">📚</span>
+                            <li key={idx} className="flex gap-2 text-sm text-[var(--text-secondary)]">
+                              <span className="text-[var(--accent-primary)]">📚</span>
                               {source}
                             </li>
                           ))
                         ) : (
-                          <div className="text-slate-500 text-sm italic text-center py-4">Kaynak listesi hazırlanıyor.</div>
+                          <div className="text-[var(--text-muted)] text-sm italic text-center py-4">Kaynak listesi hazırlanıyor.</div>
                         )}
                       </ul>
                     )}
@@ -696,10 +784,10 @@ export default function Home() {
               </div>
             )}
 
-            <div className="mt-4 pt-4 border-t border-slate-700">
-              <div className="text-xs text-slate-500 text-center flex items-center justify-center gap-1">
+            <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
+              <div className="text-xs text-[var(--text-muted)] text-center flex items-center justify-center gap-1">
                 <span className="opacity-50">Powered by</span>
-                <span className="font-semibold text-slate-400">Google Gemini Pro</span>
+                <span className="font-semibold text-[var(--text-secondary)]">Google Gemini Pro</span>
               </div>
             </div>
           </motion.div>
@@ -707,65 +795,27 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Timeline Control Panel */}
-      {/* Search Result / Historical Context Box (Left Side) */}
+
+      {/* Search Result / Historical Context Box (Refactored to Side Panel) */}
       <AnimatePresence>
         {(currentPlaceName || (searchQuery && placeHistory.length > 0)) && (
-          <motion.div
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            className="absolute top-24 left-4 md:left-6 z-30 w-64 md:w-80"
-          >
-            <div className="bg-slate-900/80 backdrop-blur-md border border-cyan-500/30 rounded-xl p-5 shadow-[0_0_15px_rgba(6,182,212,0.15)] relative overflow-hidden group">
-
-              {/* Decorative Background Elements */}
-              <div className="absolute -right-4 -top-4 w-20 h-20 bg-cyan-500/20 rounded-full blur-xl group-hover:bg-cyan-500/30 transition-all duration-500" />
-              <div className="absolute -left-4 -bottom-4 w-16 h-16 bg-blue-600/20 rounded-full blur-xl group-hover:bg-blue-600/30 transition-all duration-500" />
-
-              <div className="relative z-10">
-                {/* Header */}
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="p-1.5 bg-cyan-500/20 rounded-lg">
-                    <MapPin className="text-cyan-400 w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-bold text-cyan-400 tracking-wider uppercase">Tarihsel İsim</span>
-                </div>
-
-                {/* Main Name (Historical) */}
-                <h2 className="text-3xl font-black text-white mb-1 tracking-tight">
-                  {currentPlaceName?.name || searchQuery}
-                </h2>
-
-                {/* Subtitle (Modern Name if different) */}
-                {currentPlaceName && currentPlaceName.name !== searchQuery && (
-                  <div className="flex items-center gap-2 text-slate-400 text-sm mb-3">
-                    <span className="w-1 h-1 bg-slate-500 rounded-full"></span>
-                    <span>Modern: <span className="text-slate-200 font-medium">{searchQuery}</span></span>
-                  </div>
-                )}
-
-                {/* Divider */}
-                <div className="h-px w-full bg-gradient-to-r from-cyan-500/50 to-transparent my-3" />
-
-                {/* Context Info */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-400">Dönem:</span>
-                    <span className="text-cyan-300 font-mono font-medium">
-                      {currentPlaceName ? `${Math.abs(currentPlaceName.startYear)} ${currentPlaceName.startYear < 0 ? 'M.Ö.' : ''} - ${currentPlaceName.endYear}` : 'Bilinmeyen'}
-                    </span>
-                  </div>
-
-                  {/* Description snippet if available (using notes as fallback) */}
-                  {((currentPlaceName as any)?.description || (currentPlaceName as any)?.notes) && (
-                    <p className="text-xs text-slate-300 italic mt-2 line-clamp-3">
-                      "{(currentPlaceName as any).description || (currentPlaceName as any).notes}"
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </motion.div>
+          <PlaceDetailsPanel
+            isOpen={true}
+            currentPlaceName={currentPlaceName}
+            searchQuery={searchQuery}
+            placeHistory={placeHistory}
+            selectedYear={selectedYear}
+            onYearSelect={(year) => {
+              setSelectedYear(year);
+              const target = placeHistory.find(h => h.startYear <= year && h.endYear >= year);
+              if (target) setCurrentPlaceName(target);
+            }}
+            onClose={() => {
+              setSearchQuery('');
+              setPlaceHistory([]);
+              setCurrentPlaceName(null);
+            }}
+          />
         )}
       </AnimatePresence>
 
@@ -800,13 +850,13 @@ export default function Home() {
 
       {/* Normal Timeline Control Panel - ONLY in Default Mode */}
       {!isHistoryMode && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl z-40">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl bg-[var(--panel-bg)] backdrop-blur-xl border border-[var(--border-color)] rounded-xl p-3 shadow-2xl z-40">
           <div className="flex flex-col items-center">
             <div className="flex items-baseline gap-2 mb-1">
-              <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600 drop-shadow-glow">
+              <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[var(--accent-primary)] to-blue-600 drop-shadow-sm">
                 {selectedYear < 0 ? `M.Ö. ${Math.abs(selectedYear)}` : selectedYear}
               </span>
-              <span className="text-[10px] text-slate-400 tracking-widest uppercase">Seçili Dönem</span>
+              <span className="text-[10px] text-[var(--text-muted)] tracking-widest uppercase">Seçili Dönem</span>
             </div>
 
             <div className="w-full relative h-10 px-2 mt-1">
@@ -817,7 +867,7 @@ export default function Home() {
                 max="2026"
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500 hover:accent-cyan-400 transition-all z-20 relative"
+                className="w-full h-1.5 bg-[var(--surface-bg)] rounded-lg appearance-none cursor-pointer accent-[var(--accent-primary)] hover:accent-[var(--accent-primary)] transition-all z-20 relative history-timeline-slider"
               />
 
               {/* Marks */}
@@ -827,6 +877,7 @@ export default function Home() {
                   const max = 2026;
                   const range = max - min;
                   const percent = ((mark.year - min) / range) * 100;
+                  const near = Math.abs(selectedYear - mark.year) < 100;
 
                   return (
                     <div
@@ -835,8 +886,8 @@ export default function Home() {
                       style={{ left: `${percent}%` }}
                       onClick={() => setSelectedYear(mark.year)}
                     >
-                      <div className={`w-0.5 h-1.5 mb-1 ${Math.abs(selectedYear - mark.year) < 100 ? 'bg-cyan-400' : 'bg-slate-600'}`} />
-                      <span className={`text-[10px] whitespace-nowrap ${Math.abs(selectedYear - mark.year) < 100 ? 'text-cyan-400 font-bold' : 'text-slate-600 hover:text-slate-400'}`}>
+                      <div className={`w-0.5 h-1.5 mb-1 ${near ? 'bg-[var(--accent-primary)]' : 'bg-[var(--text-muted)]'}`} />
+                      <span className={`text-[10px] whitespace-nowrap ${near ? 'text-[var(--accent-primary)] font-bold' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
                         {mark.label}
                       </span>
                     </div>
@@ -858,8 +909,8 @@ export default function Home() {
                       style={{ left: `${percent}%` }}
                       onClick={() => setSelectedYear(entry.startYear)}
                     >
-                      <div className={`w-2 h-2 rounded-full border border-slate-900 transition-all ${isActive ? 'bg-cyan-400 scale-150 shadow-[0_0_8px_rgba(34,211,238,0.8)]' : 'bg-slate-500 hover:bg-cyan-300'}`} />
-                      <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-slate-600">
+                      <div className={`w-2 h-2 rounded-full border border-[var(--card-bg)] transition-all ${isActive ? 'bg-[var(--accent-primary)] scale-150 shadow-[0_0_8px_var(--accent-glow)]' : 'bg-slate-500 hover:bg-cyan-300'}`} />
+                      <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-[var(--card-bg)] text-[var(--text-primary)] text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-[var(--border-color)]">
                         {entry.name} ({entry.startYear})
                       </div>
                     </div>

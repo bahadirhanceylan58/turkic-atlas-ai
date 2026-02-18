@@ -99,28 +99,28 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 200, opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 z-40 pb-2 px-2 md:px-4 md:pb-4"
+            className="absolute bottom-0 left-0 right-0 z-40 pb-1 px-1 md:px-4 md:pb-4"
         >
-            <div className="bg-slate-900/90 backdrop-blur-xl border border-amber-500/20 rounded-2xl shadow-[0_0_30px_rgba(245,158,11,0.1)] overflow-hidden max-w-5xl mx-auto">
+            <div className="bg-[var(--panel-bg)] backdrop-blur-xl border border-amber-500/20 rounded-xl md:rounded-2xl shadow-[0_0_30px_rgba(245,158,11,0.1)] overflow-hidden max-w-5xl mx-auto">
 
                 {/* Row 1: Year Display (always full width, centered) */}
-                <div className="flex items-center justify-center gap-3 px-3 py-1.5 border-b border-slate-700/30">
-                    <button onClick={jumpBackward} className="p-1.5 text-slate-400 hover:text-amber-400 transition-colors active:scale-90">
-                        <ChevronLeft size={20} />
+                <div className="flex items-center justify-center gap-2 px-2 py-1 md:px-3 md:py-1.5 border-b border-[var(--border-color)]">
+                    <button onClick={jumpBackward} className="p-1 text-[var(--text-muted)] hover:text-[var(--accent-primary)] transition-colors active:scale-90">
+                        <ChevronLeft size={16} className="md:w-5 md:h-5" />
                     </button>
-                    <div className="text-center min-w-[100px]">
-                        <span className="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">
+                    <div className="text-center min-w-[80px] md:min-w-[100px]">
+                        <span className="text-lg md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">
                             {formatYear(selectedYear)}
                         </span>
                     </div>
-                    <button onClick={jumpForward} className="p-1.5 text-slate-400 hover:text-amber-400 transition-colors active:scale-90">
-                        <ChevronRight size={20} />
+                    <button onClick={jumpForward} className="p-1 text-[var(--text-muted)] hover:text-[var(--accent-primary)] transition-colors active:scale-90">
+                        <ChevronRight size={16} className="md:w-5 md:h-5" />
                     </button>
                 </div>
 
                 {/* Row 2: Filters (scrollable on mobile) */}
-                <div className="flex items-center gap-1 px-3 py-1.5 border-b border-slate-700/30 overflow-x-auto scrollbar-hide">
-                    <Filter size={12} className="text-slate-500 flex-shrink-0" />
+                <div className="flex items-center gap-1 px-3 py-1.5 border-b border-[var(--border-color)] overflow-x-auto scrollbar-hide">
+                    <Filter size={12} className="text-[var(--text-muted)] flex-shrink-0" />
                     {categories.map(cat => {
                         const Icon = cat.icon;
                         const isActive = activeFilters.length === 0 || activeFilters.includes(cat.id);
@@ -128,24 +128,24 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
                             <button
                                 key={cat.id}
                                 onClick={() => onFilterToggle(cat.id)}
-                                className={`flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-full text-[10px] md:text-[11px] font-medium transition-all border ${isActive
-                                    ? 'bg-slate-800 border-slate-600 text-white'
-                                    : 'bg-transparent border-transparent text-slate-500'
+                                className={`flex-shrink-0 flex items-center gap-1 px-2 py-0.5 md:py-1 rounded-full text-[9px] md:text-[11px] font-medium transition-all border ${isActive
+                                    ? 'bg-[var(--surface-bg)] border-[var(--border-color)] text-[var(--text-primary)]'
+                                    : 'bg-transparent border-transparent text-[var(--text-muted)]'
                                     }`}
                             >
-                                <Icon size={11} style={{ color: isActive ? cat.color : undefined }} />
+                                <Icon size={10} className="md:w-[11px] md:h-[11px]" style={{ color: isActive ? cat.color : undefined }} />
                                 <span>{cat.label}</span>
                             </button>
                         );
                     })}
 
-                    <div className="w-px h-4 bg-slate-700 mx-0.5 flex-shrink-0" />
+                    <div className="w-px h-4 bg-[var(--border-color)] mx-0.5 flex-shrink-0" />
 
                     <button
                         onClick={onTurkicToggle}
                         className={`flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-full text-[10px] md:text-[11px] font-medium transition-all border ${turkicOnly
-                            ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
-                            : 'bg-transparent border-transparent text-slate-500'
+                            ? 'bg-[var(--accent-glow)] border-[var(--accent-primary)] text-[var(--accent-primary)]'
+                            : 'bg-transparent border-transparent text-[var(--text-muted)]'
                             }`}
                     >
                         <Globe2 size={11} />
@@ -154,9 +154,9 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
                 </div>
 
                 {/* Row 3: Timeline */}
-                <div className="relative px-3 py-2">
+                <div className="relative px-2 py-1 md:px-3 md:py-2">
                     {/* Era Bars */}
-                    <div className="absolute inset-x-3 top-2 h-5 rounded overflow-hidden">
+                    <div className="absolute inset-x-2 md:inset-x-3 top-1.5 md:top-2 h-4 md:h-5 rounded overflow-hidden">
                         {ERAS.map(era => {
                             const left = yearToPercent(era.startYear);
                             const width = yearToPercent(era.endYear) - left;
@@ -220,7 +220,7 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
                                 <button
                                     key={era.name}
                                     onClick={() => onYearChange(Math.floor((era.startYear + era.endYear) / 2))}
-                                    className={`text-[8px] md:text-[9px] font-bold tracking-wider uppercase transition-all ${isActive ? 'text-amber-400' : 'text-slate-600'
+                                    className={`text-[8px] md:text-[9px] font-bold tracking-wider uppercase transition-all ${isActive ? 'text-amber-400' : 'text-[var(--text-muted)]'
                                         }`}
                                 >
                                     {era.name}
@@ -232,7 +232,7 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
 
                 {/* Row 4: Nearby Events */}
                 {nearbyEvents.length > 0 && (
-                    <div className="border-t border-slate-700/30">
+                    <div className="border-t border-[var(--border-color)]">
                         <div className="flex gap-1.5 px-3 py-1.5 overflow-x-auto scrollbar-hide">
                             {nearbyEvents.map(event => (
                                 <button
@@ -242,13 +242,13 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
                                         onYearChange(event.year);
                                     }}
                                     className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] md:text-xs font-medium transition-all border ${event.year === selectedYear
-                                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                                        : 'bg-slate-800/50 border-slate-700/50 text-slate-300'
+                                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-500'
+                                        : 'bg-[var(--surface-bg)] border-[var(--border-color)] text-[var(--text-secondary)]'
                                         }`}
                                 >
                                     <span className="text-[10px]">{event.type === 'battle' ? '⚔️' : '📜'}</span>
                                     <span className="whitespace-nowrap max-w-[120px] truncate">{event.name}</span>
-                                    <span className="text-[9px] text-slate-500 font-mono">{event.year < 0 ? `M.Ö.${Math.abs(event.year)}` : event.year}</span>
+                                    <span className="text-[8px] md:text-[9px] text-[var(--text-muted)] font-mono">{event.year < 0 ? `M.Ö.${Math.abs(event.year)}` : event.year}</span>
                                 </button>
                             ))}
                         </div>
