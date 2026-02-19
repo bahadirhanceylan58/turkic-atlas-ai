@@ -27,6 +27,8 @@ interface HistoryModePanelProps {
     onFilterToggle: (filter: string) => void;
     turkicOnly: boolean;
     onTurkicToggle: () => void;
+    showAncientSites?: boolean;
+    onAncientSitesToggle?: () => void;
 }
 
 const TIMELINE_MIN = -1000;
@@ -40,7 +42,9 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
     activeFilters,
     onFilterToggle,
     turkicOnly,
-    onTurkicToggle
+    onTurkicToggle,
+    showAncientSites = true,
+    onAncientSitesToggle
 }) => {
     const [showFilters, setShowFilters] = useState(false);
 
@@ -90,6 +94,17 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
                     >
                         <Globe2 size={12} className="inline mr-1" />
                         Türk Tarihi
+                    </button>
+                    {/* Ancient Sites Toggle */}
+                    <button
+                        onClick={onAncientSitesToggle}
+                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${showAncientSites
+                            ? 'bg-amber-600/20 border-amber-600 text-amber-500'
+                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                            }`}
+                    >
+                        <Landmark size={12} className="inline mr-1" />
+                        Antik Yerler
                     </button>
                     {[{ id: 'battle', label: 'Savaş', icon: Swords }, { id: 'treaty', label: 'Anlaşma', icon: ScrollText }].map(t => (
                         <button

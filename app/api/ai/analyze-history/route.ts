@@ -61,11 +61,21 @@ export async function POST(req: Request) {
 
         <DEMOGRAFI>
         {
-          "${year}": "Tahmini Nüfus veya 'Bilinmiyor'",
-          "${isModernEra ? '2000' : '1900'}": "Varsa Veri",
-          "Güncel": "Varsa Veri"
+          "population": {
+             "${year}": 5000,
+             "${isModernEra ? '2000' : '1900'}": 10000
+          },
+          "ethnicity": {
+             "Grup A": 60,
+             "Grup B": 30,
+             "Diğer": 10
+          },
+          "religion": {
+             "Din A": 70,
+             "Din B": 30
+          }
         }
-        (Sadece geçerli bir JSON objesi ver. Sayıları string olarak yaz, örn: '15.000 (Tahmini)' veya 'Veri Yok'. Asla sayı uydurma.)
+        (Sadece geçerli bir JSON objesi ver. Sayıları number olarak ver (string değil). Asla sayı uydurma, tahmin ise mantıklı bir tahmin yap ve JSON yapısını bozma.)
         </DEMOGRAFI>
 
         <KAYNAKLAR>

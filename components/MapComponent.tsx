@@ -22,9 +22,10 @@ interface MapBlockProps {
   historicalEvents?: any[];
   onHistoricalEventClick?: (event: any) => void;
   isAdmin?: boolean;
+  showAncientSites?: boolean;
 }
 
-const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onPlaceClick, focusedLocation, historyMode = false, historicalEvents = [], onHistoricalEventClick, isAdmin = false }) => {
+const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onPlaceClick, focusedLocation, historyMode = false, historicalEvents = [], onHistoricalEventClick, isAdmin = false, showAncientSites = true }) => {
   const mapRef = React.useRef<any>(null);
 
   // Manual Entry State
@@ -88,9 +89,13 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   const mapCache = React.useRef<{ [key: number]: any }>({});
 
   // Historical City Names - compute visible cities for the selected year
-  const historicalCityMarkers = useMemo(() => {
-    if (!historyMode) return [];
-    return getCitiesForYear(selectedYear);
+  const { visibleCities, ancientSites } = useMemo(() => {
+    if (!historyMode) return { visibleCities: [], ancientSites: [] };
+    const all = getCitiesForYear(selectedYear);
+    return {
+      visibleCities: all.filter(c => c.type !== 'ancient_site'),
+      ancientSites: all.filter(c => c.type === 'ancient_site')
+    };
   }, [historyMode, selectedYear]);
 
   // Fetch Full World Map on Year Change
@@ -214,19 +219,15 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   const [isStyleMenuOpen, setIsStyleMenuOpen] = React.useState(false);
 
   // Sync map style with theme (but respect user preference if they switch)
-  // For initial load, we want Satellite.
   useEffect(() => {
-    if (historyMode) {
-      setMapStyle('political'); // Force white/light theme in History Mode
-    } else {
-      // If not history mode, keep satellite as default unless user changed it?
-      // Or if theme changes, do we switch?
-      // Let's stick to 'satellite' as the base for now unless logic requires otherwise.
-      // If the user explicitly wants theme sync:
-      // if (theme === 'dark' && mapStyle !== 'satellite') setMapStyle('dark');
-      // For now, let's prioritize 'satellite' on mount.
+    // History mode no longer forces a specific style.
+    // If not history mode, ensure we are in satellite?
+    // User requested to remove the "parchment" look (political style).
+    // Let's default to satellite if coming from initial load, but otherwise leave it alone.
+    if (!historyMode && mapStyle === 'political') {
       setMapStyle('satellite');
     }
+    // If entering history mode, we stay on satellite unless user changess.
   }, [historyMode]); // Removed [theme] dependency to stop overriding satellite on theme change, unless desired.
 
   const mapStyleUrl = useMemo(() => {
@@ -905,64 +906,120 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         })()}
 
         {/* Historical City Name Labels — Clean text on map (History Mode only) */}
-        {historyMode && historicalCityMarkers.length > 0 && (
-          <Source
-            id="historical-city-names"
-            type="geojson"
-            data={{
-              type: 'FeatureCollection',
-              features: historicalCityMarkers.map((city, idx) => ({
-                type: 'Feature' as const,
-                id: idx,
-                geometry: {
-                  type: 'Point' as const,
-                  coordinates: [city.lng, city.lat],
-                },
-                properties: {
-                  historicalName: city.historicalName,
-                  modernName: city.modernName,
-                  civilization: city.civilization,
-                  label: city.historicalName !== city.modernName
-                    ? `${city.historicalName}\n(${city.modernName})`
-                    : city.historicalName,
-                },
-              })),
-            }}
-          >
-            {/* City name text */}
-            <Layer
-              id="historical-city-labels"
-              type="symbol"
-              layout={{
-                'text-field': ['get', 'label'],
-                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-                'text-size': [
-                  'interpolate', ['linear'], ['zoom'],
-                  2, 9,
-                  5, 12,
-                  8, 15,
-                ],
-                'text-anchor': 'top',
-                'text-offset': [0, 0.5],
-                'text-allow-overlap': false,
-                'text-ignore-placement': false,
-                'text-max-width': 10,
-                'text-line-height': 1.2,
-                'icon-image': 'circle-11',
-                'icon-size': 0.7,
-                'icon-anchor': 'center',
-                'icon-allow-overlap': true,
-              }}
-              paint={{
-                'text-color': '#4a2c0a',
-                'text-halo-color': '#f5e6c8',
-                'text-halo-width': 1.5,
-                'text-halo-blur': 0.5,
-                'text-opacity': 0.95,
-              }}
-              minzoom={2}
-            />
-          </Source>
+        {historyMode && (
+          <>
+            {/* Standard Cities */}
+            {visibleCities.length > 0 && (
+              <Source
+                id="historical-city-names"
+                type="geojson"
+                data={{
+                  type: 'FeatureCollection',
+                  features: visibleCities.map((city, idx) => ({
+                    type: 'Feature' as const,
+                    id: `city-${idx}`,
+                    geometry: {
+                      type: 'Point' as const,
+                      coordinates: [city.lng, city.lat],
+                    },
+                    properties: {
+                      historicalName: city.historicalName,
+                      modernName: city.modernName,
+                      civilization: city.civilization,
+                      label: city.historicalName !== city.modernName
+                        ? `${city.historicalName}\n(${city.modernName})`
+                        : city.historicalName,
+                    },
+                  })),
+                }}
+              >
+                <Layer
+                  id="historical-city-labels"
+                  type="symbol"
+                  layout={{
+                    'text-field': ['get', 'label'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': [
+                      'interpolate', ['linear'], ['zoom'],
+                      2, 9,
+                      5, 12,
+                      8, 15,
+                    ],
+                    'text-anchor': 'top',
+                    'text-offset': [0, 0.5],
+                    'text-allow-overlap': false,
+                    'text-ignore-placement': false,
+                    'text-max-width': 10,
+                    'text-line-height': 1.2,
+                    'icon-image': 'circle-11',
+                    'icon-size': 0.7,
+                    'icon-anchor': 'center',
+                    'icon-allow-overlap': true,
+                  }}
+                  paint={{
+                    'text-color': '#4a2c0a',
+                    'text-halo-color': '#f5e6c8',
+                    'text-halo-width': 1.5,
+                    'text-halo-blur': 0.5,
+                    'text-opacity': 0.95,
+                  }}
+                  minzoom={2}
+                />
+              </Source>
+            )}
+
+            {/* Ancient Sites (Ruins) — Distinct Styling */}
+            {showAncientSites && ancientSites.length > 0 && (
+              <Source
+                id="ancient-sites-data"
+                type="geojson"
+                data={{
+                  type: 'FeatureCollection',
+                  features: ancientSites.map((site, idx) => ({
+                    type: 'Feature' as const,
+                    id: `site-${idx}`,
+                    geometry: {
+                      type: 'Point' as const,
+                      coordinates: [site.lng, site.lat],
+                    },
+                    properties: {
+                      historicalName: site.historicalName,
+                      modernName: site.modernName,
+                      civilization: site.civilization,
+                      period: site.period, // Pass period to properties
+                      label: `${site.historicalName}\n[${site.period || 'Antik'}]`, // Show period in label
+                    },
+                  })),
+                }}
+              >
+                <Layer
+                  id="ancient-sites-labels"
+                  type="symbol"
+                  layout={{
+                    'text-field': ['get', 'label'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], // Italicize?
+                    'text-size': 11,
+                    'text-anchor': 'top',
+                    'text-offset': [0, 0.8], // Slightly lower than text
+                    'text-allow-overlap': true, // Always show important sites?
+                    'text-ignore-placement': false,
+                    'icon-image': 'star-11', // Star icon for ancient sites
+                    'icon-size': 0.9,
+                    'icon-anchor': 'center',
+                    'icon-allow-overlap': true,
+                  }}
+                  paint={{
+                    'text-color': '#8B4513', // SaddleBrown for ancient feel
+                    'text-halo-color': '#FFE4B5', // Moccasin halo
+                    'text-halo-width': 2,
+                    'text-halo-blur': 0.5,
+                    'icon-color': '#D2691E', // Chocolate color icon (if supported mask)
+                  }}
+                  minzoom={2}
+                />
+              </Source>
+            )}
+          </>
         )}
 
         {/* Manual Entry Marker (Preview) */}

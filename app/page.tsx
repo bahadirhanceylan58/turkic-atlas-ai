@@ -18,6 +18,8 @@ import { useTheme } from '@/components/ThemeProvider';
 import { Moon, Sun } from 'lucide-react';
 
 const MapBlock = dynamic(() => import('@/components/MapComponent'), { ssr: false });
+import MapOverlay from '@/components/MapOverlay';
+import DemographicsCharts from '@/components/DemographicsCharts';
 import { findDistrict, GeoJSONCollection } from '@/lib/geoUtils';
 
 const safeJSONParse = (input: string) => {
@@ -88,6 +90,7 @@ export default function Home() {
   const [selectedEvent, setSelectedEvent] = useState<HistoricalEvent | null>(null);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [turkicOnly, setTurkicOnly] = useState(false);
+  const [showAncientSites, setShowAncientSites] = useState(true); // New state for Ancient Sites
   const [dynastyInfo, setDynastyInfo] = useState<string | null>(null);
   const [isLoadingDynasty, setIsLoadingDynasty] = useState(false);
 
@@ -341,45 +344,51 @@ export default function Home() {
   };
 
   const handlePlaceClick = async (place: any) => {
-    // Open AI Panel with Place Info
+    console.log("Place clicked:", place);
+    if (!place || !place.name) return;
+
+    // Force close search mobile if open
+    setMobileSearchOpen(false);
+
+    // Open AI Panel with Place Info immediately
     setSelectedState(place.name); // Title of the panel
     setRelatedState(null); // Reset related state
-
-    // Determine data source (Supabase 'historical_data' or place properties)
-    const placeInfo = place.historical_data || {};
-
-    // Set feature data for the panel (reusing structure for display)
-    setSelectedFeatureData({
-      ...placeInfo,
-      name: place.name,
-      type: place.type,
-      confidence_score: 95
-    });
-
     setAiPanelOpen(true);
     setAiAnalysis('');
     setIsAnalyzing(true);
     setActiveTab('analysis');
 
+    // Create a safe data object
+    const placeInfo = place.historical_data || {};
+
+    // Set feature data for the panel
+    setSelectedFeatureData({
+      ...placeInfo,
+      name: place.name,
+      type: place.type,
+      confidence_score: 95,
+      // Ensure we preserve existing props if available
+      demographics: placeInfo.demographics || place.demographics,
+      sources: placeInfo.sources || place.sources
+    });
+
     // Clear any existing typing interval
     if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
 
-    // Generate Analysis or use Description
     try {
+      // ... existing logic ...
       // Fetch historical names (Etymology Dictionary) for this place
-      // This populates the "Nişanyan Dictionary" view
       if (place.name) {
-        try {
-          const history = await getPlaceNameHistory(place.name);
-          setPlaceHistory(history);
-          setCurrentPlaceName(history.find(h => h.startYear <= selectedYear && h.endYear >= selectedYear) || null);
-        } catch (err) {
-          console.error("Failed to fetch etymology", err);
-        }
+        getPlaceNameHistory(place.name)
+          .then(history => {
+            setPlaceHistory(history);
+            setCurrentPlaceName(history.find(h => h.startYear <= selectedYear && h.endYear >= selectedYear) || null);
+          })
+          .catch(err => console.error("Etymology fetch error:", err));
       }
 
       if (placeInfo.description) {
-        // Typewriter effect for existing description
+        // ... existing description handling ...
         const analysis = placeInfo.description;
         let i = 0;
         typingIntervalRef.current = setInterval(() => {
@@ -391,51 +400,40 @@ export default function Home() {
         }, 10);
         setIsAnalyzing(false);
       } else {
-        // Trigger AI Analysis for this place
+        // Trigger AI Analysis
         const lat = Number(place.lat || place.latitude);
         const lng = Number(place.lng || place.longitude);
         const location = (!isNaN(lat) && !isNaN(lng)) ? { lat, lng } : undefined;
 
-        // Findings district if location is available
+        // ... district lookup ...
         let district: string | undefined;
         if (location && districtsGeoJSON) {
           const d = findDistrict(location.lat, location.lng, districtsGeoJSON);
           if (d) district = d;
-          console.log(`District lookup for ${place.name}: ${district}`);
         }
 
-        // Determine correct historical name to guide AI
+        // ... historical name logic ...
         let historicalName: string | undefined;
-
-        // 1. Check if we have a currently selected historical period name (from Search/Stepper)
-        // AND if it matches the place we are clicking (if place.name is the same modern name)
         if (currentPlaceName && place.name === searchQuery) {
           historicalName = currentPlaceName.name;
-        }
-
-        // 2. Check if the place object itself has an etymology chain (from Map Data)
-        else if (place.etymology_chain || place.properties?.etymology_chain) {
+        } else if (place.etymology_chain || place.properties?.etymology_chain) {
           const chain = place.etymology_chain || place.properties?.etymology_chain;
           if (Array.isArray(chain)) {
-            const match = chain
-              .sort((a: any, b: any) => b.year - a.year) // Sort descending
-              .find((item: any) => item.year <= selectedYear);
+            const match = chain.sort((a: any, b: any) => b.year - a.year).find((item: any) => item.year <= selectedYear);
             if (match) historicalName = match.name;
           }
         }
 
-        console.log(`AI Analysis using enforced name: ${historicalName} for year ${selectedYear}`);
-
         const fullResponse = await generateHistoryAnalysis(place.name, selectedYear, location, district, historicalName);
         setIsAnalyzing(false);
 
-        // Parse XML Sections
+        // ... parsing logic ...
         const analizMatch = fullResponse.match(/<ANALIZ>([\s\S]*?)<\/ANALIZ>/);
         const demografiMatch = fullResponse.match(/<DEMOGRAFI>([\s\S]*?)<\/DEMOGRAFI>/);
         const kaynaklarMatch = fullResponse.match(/<KAYNAKLAR>([\s\S]*?)<\/KAYNAKLAR>/);
         const devletMatch = fullResponse.match(/<DEVLET>([\s\S]*?)<\/DEVLET>/);
 
-        const analizText = analizMatch ? analizMatch[1].trim() : fullResponse; // Fallback to full text if no tags
+        const analizText = analizMatch ? analizMatch[1].trim() : fullResponse;
         const demografiText = demografiMatch ? demografiMatch[1].trim() : null;
         const kaynaklarText = kaynaklarMatch ? kaynaklarMatch[1].trim() : null;
         const devletText = devletMatch ? devletMatch[1].trim() : null;
@@ -444,10 +442,7 @@ export default function Home() {
           setRelatedState(devletText);
         }
 
-        // Process Demographics
         let demographicsData = safeJSONParse(demografiText || '');
-
-        // Process Sources
         let sourcesList: string[] = [];
         if (kaynaklarText) {
           sourcesList = kaynaklarText.split('\n')
@@ -456,14 +451,12 @@ export default function Home() {
             .map(line => line.substring(1).trim());
         }
 
-        // Update parsed data into state
         setSelectedFeatureData((prev: any) => ({
           ...prev,
           demographics: demographicsData || prev?.demographics,
           sources: sourcesList.length > 0 ? sourcesList : prev?.sources
         }));
 
-        // Typewriter effect for Analysis text
         const analysisToType = analizText;
         let i = 0;
         typingIntervalRef.current = setInterval(() => {
@@ -474,10 +467,10 @@ export default function Home() {
           }
         }, 10);
       }
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error("AI Analysis Error:", error);
       setIsAnalyzing(false);
-      setAiAnalysis("Bu yer için detaylı analiz henüz oluşturulamadı.");
+      setAiAnalysis("Bağlantı hatası veya veri işleme sorunu oluştu. Lütfen tekrar deneyin.\n\n" + (error?.message || ""));
     }
   };
 
@@ -565,7 +558,9 @@ export default function Home() {
         historicalEvents={historicalEvents}
         onHistoricalEventClick={handleHistoricalEventClick}
         isAdmin={isAdmin}
+        showAncientSites={showAncientSites}
       />
+      {/* MapOverlay removed per user request */}
 
       {/* Responsive Header */}
       <header className="absolute top-0 left-0 w-full z-40 p-4 md:p-6 flex items-center justify-between pointer-events-none">
@@ -796,12 +791,7 @@ export default function Home() {
                     {activeTab === 'demographics' && (
                       <div className="space-y-4">
                         {selectedFeatureData?.demographics ? (
-                          Object.entries(selectedFeatureData.demographics).map(([year, pop]: [string, any]) => (
-                            <div key={year} className="flex justify-between items-center border-b border-[var(--border-color)] pb-2 last:border-0">
-                              <span className="text-[var(--accent-primary)] font-mono text-sm">{year}</span>
-                              <span className="text-[var(--text-primary)] text-sm">{pop}</span>
-                            </div>
-                          ))
+                          <DemographicsCharts data={selectedFeatureData.demographics} />
                         ) : (
                           <div className="text-[var(--text-muted)] text-sm italic text-center py-4">Bu dönem/bölge için doğrulanmış demografik veri bulunamadı.</div>
                         )}
@@ -887,6 +877,8 @@ export default function Home() {
             onFilterToggle={handleFilterToggle}
             turkicOnly={turkicOnly}
             onTurkicToggle={() => setTurkicOnly(!turkicOnly)}
+            showAncientSites={showAncientSites}
+            onAncientSitesToggle={() => setShowAncientSites(!showAncientSites)}
           />
         )}
       </AnimatePresence>

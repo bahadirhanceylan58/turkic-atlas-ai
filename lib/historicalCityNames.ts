@@ -13,6 +13,8 @@ export interface HistoricalCity {
     lat: number;
     lng: number;
     names: HistoricalName[];
+    type?: 'city' | 'ancient_site'; // New field for categorization
+    period?: string; // New field for specific historical period (e.g. Neolithic)
 }
 
 /**
@@ -37,6 +39,8 @@ export function getCitiesForYear(year: number): Array<{
     civilization: string;
     lat: number;
     lng: number;
+    type: 'city' | 'ancient_site';
+    period?: string;
 }> {
     return HISTORICAL_CITIES
         .map(city => {
@@ -48,6 +52,8 @@ export function getCitiesForYear(year: number): Array<{
                     civilization: match.civilization,
                     lat: city.lat,
                     lng: city.lng,
+                    type: city.type || 'city',
+                    period: city.period
                 };
             }
             return null;
@@ -60,6 +66,149 @@ export function getCitiesForYear(year: number): Array<{
 // ============================================================
 
 export const HISTORICAL_CITIES: HistoricalCity[] = [
+    // ─── ANTIK ÖREN YERLERİ (ANCIENT SITES) ───
+    {
+        modernName: 'Göbeklitepe',
+        lat: 37.2233,
+        lng: 38.9223,
+        type: 'ancient_site',
+        period: 'Neolitik Çağ (M.Ö. 9500)',
+        names: [
+            { name: 'Göbeklitepe', startYear: -10000, endYear: -8000, civilization: 'Tarih Öncesi' },
+        ],
+    },
+    {
+        modernName: 'Çatalhöyük',
+        lat: 37.6675,
+        lng: 32.8283,
+        type: 'ancient_site',
+        period: 'Neolitik Çağ (M.Ö. 7100)',
+        names: [
+            { name: 'Çatalhöyük', startYear: -7500, endYear: -5700, civilization: 'Neolitik Yerleşim' },
+        ],
+    },
+    {
+        modernName: 'Troya',
+        lat: 39.9575,
+        lng: 26.2389,
+        type: 'ancient_site',
+        period: 'Tunç Çağı',
+        names: [
+            { name: 'Wilusa', startYear: -3000, endYear: -1180, civilization: 'Luvi / Hitit' },
+            { name: 'Ilion', startYear: -1180, endYear: 400, civilization: 'Yunan / Roma' },
+        ],
+    },
+    {
+        modernName: 'Nemrut Dağı',
+        lat: 37.9806,
+        lng: 38.7408,
+        type: 'ancient_site',
+        period: 'Helenistik Dönem',
+        names: [
+            { name: 'Nemrut (Kommagene)', startYear: -163, endYear: 72, civilization: 'Kommagene Krallığı' },
+        ],
+    },
+    {
+        modernName: 'Hattuşa',
+        lat: 40.0197,
+        lng: 34.6153,
+        type: 'ancient_site',
+        period: 'Tunç Çağı',
+        names: [
+            { name: 'Hattuşa', startYear: -1650, endYear: -1178, civilization: 'Hitit İmparatorluğu' },
+        ],
+    },
+    {
+        modernName: 'Efes',
+        lat: 37.9411,
+        lng: 27.3419,
+        type: 'ancient_site',
+        period: 'Antik Çağ',
+        names: [
+            { name: 'Ephesos', startYear: -1000, endYear: 614, civilization: 'İyonya / Roma' },
+        ],
+    },
+    {
+        modernName: 'Aspendos',
+        lat: 36.9389,
+        lng: 31.1725,
+        type: 'ancient_site',
+        period: 'Roma Dönemi',
+        names: [
+            { name: 'Aspendos', startYear: -500, endYear: 600, civilization: 'Roma' },
+        ],
+    },
+    {
+        modernName: 'Perge',
+        lat: 36.9614,
+        lng: 30.8533,
+        type: 'ancient_site',
+        period: 'Helenistik / Roma',
+        names: [
+            { name: 'Perge', startYear: -1200, endYear: 700, civilization: 'Pamfilya / Roma' },
+        ],
+    },
+    {
+        modernName: 'Zeugma',
+        lat: 37.0586,
+        lng: 37.8652,
+        type: 'ancient_site',
+        period: 'Roma Dönemi',
+        names: [
+            { name: 'Seleukeia Euphrates', startYear: -300, endYear: -64, civilization: 'Selevkos' },
+            { name: 'Zeugma', startYear: -64, endYear: 256, civilization: 'Roma İmparatorluğu' },
+        ],
+    },
+    {
+        modernName: 'Ani Harabeleri',
+        lat: 40.5075,
+        lng: 43.5728,
+        type: 'ancient_site',
+        period: 'Orta Çağ',
+        names: [
+            { name: 'Ani', startYear: 961, endYear: 1319, civilization: 'Bagratuni / Selçuklu' },
+        ],
+    },
+    {
+        modernName: 'Gordion',
+        lat: 39.6508,
+        lng: 31.9844,
+        type: 'ancient_site',
+        period: 'Demir Çağı',
+        names: [
+            { name: 'Gordion', startYear: -1200, endYear: -200, civilization: 'Frigya (Başkent)' },
+        ],
+    },
+    {
+        modernName: 'Sardes',
+        lat: 38.4877,
+        lng: 28.0400,
+        type: 'ancient_site',
+        period: 'Demir Çağı',
+        names: [
+            { name: 'Sardes', startYear: -1200, endYear: 616, civilization: 'Lidya (Başkent) / Roma' },
+        ],
+    },
+    {
+        modernName: 'Milet',
+        lat: 37.5308,
+        lng: 27.2782,
+        type: 'ancient_site',
+        period: 'Antik Çağ',
+        names: [
+            { name: 'Miletos', startYear: -1000, endYear: 500, civilization: 'İyonya / Roma' },
+        ],
+    },
+    {
+        modernName: 'Bergama',
+        lat: 39.1218,
+        lng: 27.1794,
+        type: 'ancient_site',
+        period: 'Helenistik Dönem',
+        names: [
+            { name: 'Pergamon', startYear: -300, endYear: 700, civilization: 'Pergamon Krallığı / Roma' },
+        ],
+    },
     // ─── ANADOLU (TÜRKİYE) ───
     {
         modernName: 'İstanbul',
@@ -308,40 +457,6 @@ export const HISTORICAL_CITIES: HistoricalCity[] = [
         names: [
             { name: 'Neocaesarea', startYear: -64, endYear: 1071, civilization: 'Roma / Bizans' },
             { name: 'Niksar', startYear: 1071, endYear: 2100, civilization: 'Danişmend (Başkent) / Osmanlı / Türkiye' },
-        ],
-    },
-    // Antik yerleşim yerleri (yıkıntı/arkeolojik alan koordinatları)
-    {
-        modernName: 'Hattuşa (Boğazkale)',
-        lat: 40.0197,
-        lng: 34.6153,
-        names: [
-            { name: 'Hattuşa', startYear: -1650, endYear: -1178, civilization: 'Hitit İmparatorluğu (Başkent)' },
-        ],
-    },
-    {
-        modernName: 'Efes (Selçuk)',
-        lat: 37.9411,
-        lng: 27.3419,
-        names: [
-            { name: 'Ephesos', startYear: -1000, endYear: -133, civilization: 'İyonya / Yunan' },
-            { name: 'Ephesus', startYear: -133, endYear: 614, civilization: 'Roma / Bizans' },
-        ],
-    },
-    {
-        modernName: 'Milet',
-        lat: 37.5308,
-        lng: 27.2782,
-        names: [
-            { name: 'Miletos', startYear: -1000, endYear: 500, civilization: 'İyonya / Roma' },
-        ],
-    },
-    {
-        modernName: 'Bergama',
-        lat: 39.1218,
-        lng: 27.1794,
-        names: [
-            { name: 'Pergamon', startYear: -300, endYear: 700, civilization: 'Pergamon Krallığı / Roma' },
         ],
     },
 
