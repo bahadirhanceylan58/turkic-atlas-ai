@@ -91,6 +91,7 @@ export default function Home() {
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [turkicOnly, setTurkicOnly] = useState(false);
   const [showAncientSites, setShowAncientSites] = useState(true); // New state for Ancient Sites
+  const [showCulturalHeritage, setShowCulturalHeritage] = useState(true);
   const [dynastyInfo, setDynastyInfo] = useState<string | null>(null);
   const [isLoadingDynasty, setIsLoadingDynasty] = useState(false);
 
@@ -559,6 +560,7 @@ export default function Home() {
         onHistoricalEventClick={handleHistoricalEventClick}
         isAdmin={isAdmin}
         showAncientSites={showAncientSites}
+        showCulturalHeritage={showCulturalHeritage}
       />
       {/* MapOverlay removed per user request */}
 
@@ -601,7 +603,7 @@ export default function Home() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Şehir veya bölge adı yazın..."
-                className="w-full bg-[var(--input-bg)] backdrop-blur-md border border-[var(--border-color)] text-[var(--text-primary)] text-sm rounded-full py-2.5 pl-10 pr-4 focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] transition-all placeholder:text-[var(--text-muted)] shadow-lg"
+                className="w-full glass-panel text-[var(--text-primary)] text-sm rounded-full py-2.5 pl-10 pr-4 focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] transition-all placeholder:text-[var(--text-muted)] shadow-lg"
               />
               {placeHistory.length > 0 && (
                 <div className="absolute top-1 right-1 px-2 py-1.5 rounded-full text-[10px] bg-[var(--badge-bg)] text-[var(--accent-primary)] border border-[var(--border-color)]">
@@ -628,7 +630,7 @@ export default function Home() {
           {/* User Auth Area */}
           {currentUser ? (
             <div className="flex items-center gap-2">
-              <div className="hidden md:flex items-center gap-2 bg-[var(--panel-bg)] backdrop-blur-md border border-[var(--border-color)] rounded-full px-3 py-1.5">
+              <div className="hidden md:flex items-center gap-2 glass-panel rounded-full px-3 py-1.5">
                 <UserCircle className="w-5 h-5 text-[var(--accent-primary)]" />
                 <span className="text-sm text-[var(--text-secondary)] max-w-[120px] truncate">
                   {currentUser.user_metadata?.username || currentUser.email?.split('@')[0]}
@@ -639,7 +641,7 @@ export default function Home() {
                   if (supabase) await supabase.auth.signOut();
                   setCurrentUser(null);
                 }}
-                className="p-2 bg-[var(--panel-bg)] backdrop-blur-md border border-[var(--border-color)] hover:border-red-500/50 rounded-full transition-all text-[var(--text-muted)] hover:text-red-400"
+                className="p-2 glass-panel hover:border-red-500/50 rounded-full transition-all text-[var(--text-muted)] hover:text-red-400"
                 title="Çıkış Yap"
               >
                 <LogOut className="w-4 h-4 md:w-5 md:h-5" />
@@ -648,7 +650,7 @@ export default function Home() {
           ) : (
             <button
               onClick={() => setIsAuthModalOpen(true)}
-              className="bg-[var(--panel-bg)] backdrop-blur-md border border-[var(--border-color)] hover:border-[var(--accent-primary)] text-[var(--text-primary)] p-2 md:px-6 md:py-2.5 rounded-full transition-all hover:shadow-[0_0_15px_var(--accent-glow)] group flex items-center justify-center"
+              className="glass-panel glow-effect text-[var(--text-primary)] p-2 md:px-6 md:py-2.5 rounded-full transition-all hover:shadow-[0_0_15px_var(--accent-glow)] group flex items-center justify-center"
             >
               <LogIn className="block md:hidden w-5 h-5 text-[var(--accent-primary)]" />
               <span className="hidden md:block text-sm font-medium bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)] bg-clip-text text-transparent group-hover:from-[var(--accent-primary)] group-hover:to-blue-400 transition-all">
@@ -707,7 +709,7 @@ export default function Home() {
             initial={{ x: 400 }}
             animate={{ x: 0 }}
             exit={{ x: 400 }}
-            className="fixed top-0 right-0 bottom-0 w-full md:w-[320px] bg-[var(--panel-bg)] backdrop-blur-xl border-l border-[var(--border-color)] shadow-2xl z-50 p-5 flex flex-col"
+            className="fixed top-0 right-0 bottom-0 w-full md:w-[320px] bg-white/70 dark:bg-slate-900/80 backdrop-blur-md border-l border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-5 flex flex-col"
           >
             <div className="flex justify-between items-start mb-6">
               <div className="flex items-center gap-2">
@@ -879,6 +881,8 @@ export default function Home() {
             onTurkicToggle={() => setTurkicOnly(!turkicOnly)}
             showAncientSites={showAncientSites}
             onAncientSitesToggle={() => setShowAncientSites(!showAncientSites)}
+            showCulturalHeritage={showCulturalHeritage}
+            onCulturalHeritageToggle={() => setShowCulturalHeritage(!showCulturalHeritage)}
           />
         )}
       </AnimatePresence>
@@ -889,7 +893,7 @@ export default function Home() {
           <div
             className="absolute bottom-6 left-1/2 -translate-x-1/2 transition-all duration-300 w-[90%] md:w-[60%] lg:w-[50%] max-w-4xl z-40"
           >
-            <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-full px-6 py-3 flex items-center gap-4 shadow-2xl">
+            <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-full px-6 py-3 flex items-center gap-4 shadow-2xl">
 
               {/* Year Display */}
               <div className="flex flex-col items-start min-w-[80px]">

@@ -47,7 +47,7 @@ export default function DemographicsCharts({ data }: DemographicsChartsProps) {
                             <YAxis stroke="#888" fontSize={12} tickFormatter={(value) => value.toLocaleString()} />
                             <Tooltip
                                 contentStyle={{ backgroundColor: 'var(--panel-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                                formatter={(value: number) => value.toLocaleString()}
+                                formatter={(value: any) => value !== undefined && value !== null ? value.toLocaleString() : ''}
                             />
                             <Bar dataKey="nüfus" fill="var(--accent-primary)" radius={[4, 4, 0, 0]} />
                         </BarChart>

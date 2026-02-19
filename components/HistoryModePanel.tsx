@@ -29,6 +29,8 @@ interface HistoryModePanelProps {
     onTurkicToggle: () => void;
     showAncientSites?: boolean;
     onAncientSitesToggle?: () => void;
+    showCulturalHeritage?: boolean;
+    onCulturalHeritageToggle?: () => void;
 }
 
 const TIMELINE_MIN = -1000;
@@ -44,7 +46,9 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
     turkicOnly,
     onTurkicToggle,
     showAncientSites = true,
-    onAncientSitesToggle
+    onAncientSitesToggle,
+    showCulturalHeritage = true,
+    onCulturalHeritageToggle
 }) => {
     const [showFilters, setShowFilters] = useState(false);
 
@@ -83,7 +87,7 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
         >
             {/* Filter Pill (Optional, floats above) */}
             {showFilters && (
-                <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-full px-4 py-2 flex items-center gap-2 shadow-xl mb-2 animate-in fade-in slide-in-from-bottom-2">
+                <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-full px-4 py-2 flex items-center gap-2 shadow-xl mb-2 animate-in fade-in slide-in-from-bottom-2">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-2">Filtreler:</span>
                     <button
                         onClick={onTurkicToggle}
@@ -106,6 +110,17 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
                         <Landmark size={12} className="inline mr-1" />
                         Antik Yerler
                     </button>
+                    {/* Cultural Heritage Toggle */}
+                    <button
+                        onClick={onCulturalHeritageToggle}
+                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${showCulturalHeritage
+                            ? 'bg-purple-600/20 border-purple-600 text-purple-400'
+                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                            }`}
+                    >
+                        <BookOpen size={12} className="inline mr-1" />
+                        Ata Mirası
+                    </button>
                     {[{ id: 'battle', label: 'Savaş', icon: Swords }, { id: 'treaty', label: 'Anlaşma', icon: ScrollText }].map(t => (
                         <button
                             key={t.id}
@@ -123,7 +138,7 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
             )}
 
             {/* Main Control Bar */}
-            <div className="w-full bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-full px-4 py-3 md:px-6 md:py-3 flex items-center gap-3 md:gap-4 shadow-2xl">
+            <div className="w-full bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-full px-4 py-3 md:px-6 md:py-3 flex items-center gap-3 md:gap-4 shadow-2xl">
 
                 {/* Left: Year & Navigation */}
                 <div className="flex items-center gap-2 pl-1 md:pl-2 border-r border-slate-700 pr-3 md:pr-4">

@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import AddPlaceModal from './AddPlaceModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getCitiesForYear, HISTORICAL_CITIES } from '@/lib/historicalCityNames';
+import { CULTURAL_HERITAGE_DATA } from '@/lib/culturalHeritageData';
 import { useTheme } from '@/components/ThemeProvider';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -23,9 +24,10 @@ interface MapBlockProps {
   onHistoricalEventClick?: (event: any) => void;
   isAdmin?: boolean;
   showAncientSites?: boolean;
+  showCulturalHeritage?: boolean;
 }
 
-const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onPlaceClick, focusedLocation, historyMode = false, historicalEvents = [], onHistoricalEventClick, isAdmin = false, showAncientSites = true }) => {
+const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onPlaceClick, focusedLocation, historyMode = false, historicalEvents = [], onHistoricalEventClick, isAdmin = false, showAncientSites = true, showCulturalHeritage = true }) => {
   const mapRef = React.useRef<any>(null);
 
   // Manual Entry State
@@ -220,15 +222,12 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
 
   // Sync map style with theme (but respect user preference if they switch)
   useEffect(() => {
-    // History mode no longer forces a specific style.
-    // If not history mode, ensure we are in satellite?
-    // User requested to remove the "parchment" look (political style).
-    // Let's default to satellite if coming from initial load, but otherwise leave it alone.
-    if (!historyMode && mapStyle === 'political') {
-      setMapStyle('satellite');
+    if (historyMode) {
+      setMapStyle('political'); // Tarih modunda siyasi beyaz/parşömen stili
+    } else {
+      setMapStyle('satellite'); // Normal modda fiziki harita
     }
-    // If entering history mode, we stay on satellite unless user changess.
-  }, [historyMode]); // Removed [theme] dependency to stop overriding satellite on theme change, unless desired.
+  }, [historyMode]);
 
   const mapStyleUrl = useMemo(() => {
     switch (mapStyle) {
@@ -552,22 +551,45 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   }, [historyMode, mapStyle]);
 
   const onMapClick = (event: any) => {
-    // 1. Check for Historical City Labels (Priority)
+    // 1. Check for Historical City Labels & Custom Annotations (Priority)
     const clickedFeatures = event.features || [];
-    const historicalLabel = clickedFeatures.find((f: any) => f.layer.id === 'historical-city-labels');
+
+    // Check for Cultural Heritage
+    const culturalLabel = clickedFeatures.find((f: any) => f.layer.id === 'cultural-heritage-labels' || f.layer.id === 'cultural-heritage-glow');
+    if (culturalLabel) {
+      const props = culturalLabel.properties;
+      const coords = culturalLabel.geometry.coordinates; // [lng, lat]
+      const isMobile = window.innerWidth < 768;
+
+      mapRef.current?.flyTo({
+        center: [coords[0], coords[1]],
+        zoom: 12, // Zoom in closer for heritage sites
+        duration: 1000,
+        padding: isMobile ? { bottom: 300, top: 0, left: 0, right: 0 } : { bottom: 0, top: 0, left: 0, right: 0 }
+      });
+
+      if (onPlaceClick) {
+        onPlaceClick({
+          name: props.name,
+          lat: coords[1],
+          lng: coords[0],
+          type: 'cultural-heritage',
+          historical_data: {
+            description: props.description,
+            sources: [props.significance]
+          }
+        });
+      }
+      return;
+    }
+
+    const historicalLabel = clickedFeatures.find((f: any) => f.layer.id === 'historical-city-labels' || f.layer.id === 'ancient-sites-labels');
 
     if (historicalLabel) {
       const props = historicalLabel.properties;
       const coords = historicalLabel.geometry.coordinates; // [lng, lat]
 
-      // Adjust center for mobile: If panel opens at bottom, we need to shift view North (so target moves South)? 
-      // User says "Gidip Tokat'a odaklanıyor" (Focuses North of Sivas).
-      // If Focus is North, Sivas is South (Bottom).
-      // If panel covers bottom, Sivas is hidden.
-      // So we need to shift the *Camera* SOUTH, so Sivas moves NORTH (Up).
-      // Shifting Camera South = Decrease Latitude.
-      // Let's use padding option instead of manual calculation for better stability.
-
+      // Adjust center for mobile
       const isMobile = window.innerWidth < 768; // Simple check
 
       mapRef.current?.flyTo({
@@ -575,17 +597,17 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         zoom: 10,
         duration: 1000,
         padding: isMobile ? { bottom: 300, top: 0, left: 0, right: 0 } : { bottom: 0, top: 0, left: 0, right: 0 }
-        // Bottom padding moves the "center" up visually, keeping the target in the top open area.
       });
 
       if (onPlaceClick) {
         onPlaceClick({
-          name: props.historicalName,
+          name: props.historicalName || props.name,
           lat: coords[1],
           lng: coords[0],
-          type: 'historical-city',
+          type: historicalLabel.layer.id === 'ancient-sites-labels' ? 'ancient-site' : 'historical-city',
           modernName: props.modernName,
           civilization: props.civilization,
+          period: props.period,
         });
       }
       return;
@@ -663,7 +685,10 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           'districts-fill-click',
           'places-point',
           'places-label',
-          'historical-city-labels'
+          'historical-city-labels',
+          'ancient-sites-labels',
+          'cultural-heritage-labels',
+          'cultural-heritage-glow'
         ]}
         onClick={onMapClick}
         onLoad={() => {
@@ -1020,6 +1045,75 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
               </Source>
             )}
           </>
+        )}
+
+        {/* Cultural Heritage Sites */}
+        {historyMode && showCulturalHeritage && CULTURAL_HERITAGE_DATA && CULTURAL_HERITAGE_DATA.length > 0 && (
+          <Source
+            id="cultural-heritage-data"
+            type="geojson"
+            data={{
+              type: 'FeatureCollection',
+              features: CULTURAL_HERITAGE_DATA.filter(site => selectedYear >= site.year).map((site, idx) => ({
+                type: 'Feature' as const,
+                id: `heritage-${idx}`,
+                geometry: {
+                  type: 'Point' as const,
+                  coordinates: [site.lng, site.lat],
+                },
+                properties: {
+                  name: site.name,
+                  type: 'cultural-heritage',
+                  heritageType: site.type,
+                  description: site.description,
+                  significance: site.significance,
+                  label: `${site.name}`,
+                },
+              })),
+            }}
+          >
+            {/* Glow effect under the icon */}
+            <Layer
+              id="cultural-heritage-glow"
+              type="circle"
+              paint={{
+                'circle-radius': 14,
+                'circle-color': '#9333ea', // purple
+                'circle-blur': 0.8,
+                'circle-opacity': 0.8
+              }}
+              minzoom={2}
+            />
+            <Layer
+              id="cultural-heritage-labels"
+              type="symbol"
+              layout={{
+                'text-field': ['get', 'label'],
+                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                'text-size': 12,
+                'text-anchor': 'top',
+                'text-offset': [0, 1.2],
+                'text-allow-overlap': true,
+                'icon-image': [
+                  'match',
+                  ['get', 'heritageType'],
+                  'architecture', 'monument-11',
+                  'monument', 'monument-11',
+                  'literature', 'library-11',
+                  'mythology', 'star-11',
+                  'star-11'
+                ],
+                'icon-size': 1.2,
+                'icon-allow-overlap': true,
+              }}
+              paint={{
+                'text-color': '#d8b4fe', // light purple
+                'text-halo-color': '#3b0764', // dark purple
+                'text-halo-width': 2,
+              }}
+              minzoom={2}
+            />
+          </Source>
         )}
 
         {/* Manual Entry Marker (Preview) */}
