@@ -45,7 +45,7 @@ export default function PlaceDetailsPanel({
           flex flex-col transition-all duration-300
           
           /* Desktop Styles */
-          md:left-0 md:top-0 md:bottom-0 md:w-[400px] md:border-r md:rounded-none
+          md:left-0 md:top-0 md:bottom-0 md:w-[300px] md:border-r md:rounded-none
           
           /* Mobile Styles (Bottom Sheet) */
           left-0 right-0 bottom-0 h-[65vh] rounded-t-2xl border-t
@@ -88,8 +88,8 @@ export default function PlaceDetailsPanel({
                         <button
                             onClick={() => setActiveTab('overview')}
                             className={`pb-2 text-sm font-bold tracking-wide transition-all border-b-2 ${activeTab === 'overview'
-                                    ? 'text-[var(--accent-primary)] border-[var(--accent-primary)]'
-                                    : 'text-[var(--text-muted)] border-transparent hover:text-[var(--text-secondary)]'
+                                ? 'text-[var(--accent-primary)] border-[var(--accent-primary)]'
+                                : 'text-[var(--text-muted)] border-transparent hover:text-[var(--text-secondary)]'
                                 }`}
                         >
                             GENEL BAKIŞ
@@ -97,8 +97,8 @@ export default function PlaceDetailsPanel({
                         <button
                             onClick={() => setActiveTab('etymology')}
                             className={`pb-2 text-sm font-bold tracking-wide transition-all border-b-2 ${activeTab === 'etymology'
-                                    ? 'text-[var(--accent-primary)] border-[var(--accent-primary)]'
-                                    : 'text-[var(--text-muted)] border-transparent hover:text-[var(--text-secondary)]'
+                                ? 'text-[var(--accent-primary)] border-[var(--accent-primary)]'
+                                : 'text-[var(--text-muted)] border-transparent hover:text-[var(--text-secondary)]'
                                 }`}
                         >
                             ETİMOLOJİ
@@ -196,8 +196,8 @@ export default function PlaceDetailsPanel({
 
                                             {/* Content Card */}
                                             <div className={`p-3 rounded-xl border transition-all ${isCurrent
-                                                    ? 'bg-[var(--surface-bg)] border-[var(--accent-primary)]/50 shadow-sm'
-                                                    : 'border-transparent hover:bg-[var(--surface-bg)] hover:border-[var(--border-color)]'
+                                                ? 'bg-[var(--surface-bg)] border-[var(--accent-primary)]/50 shadow-sm'
+                                                : 'border-transparent hover:bg-[var(--surface-bg)] hover:border-[var(--border-color)]'
                                                 }`}>
                                                 <div className="flex items-center justify-between mb-1">
                                                     <span className="text-xs font-mono font-bold text-[var(--accent-primary)]">

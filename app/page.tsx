@@ -20,12 +20,53 @@ import { Moon, Sun } from 'lucide-react';
 const MapBlock = dynamic(() => import('@/components/MapComponent'), { ssr: false });
 import { findDistrict, GeoJSONCollection } from '@/lib/geoUtils';
 
+const safeJSONParse = (input: string) => {
+  if (!input) return null;
+
+  // 1. Remove markdown code blocks
+  let cleaned = input.replace(/```json/g, '').replace(/```/g, '').trim();
+
+  // 2. Remove leading/trailing quotes if it's a double-stringified JSON
+  if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+    try {
+      cleaned = JSON.parse(cleaned);
+    } catch (e) {
+      // If unwrapping fails, proceed with original cleaned string
+    }
+  }
+
+  // 3. Handle literal escaped characters (Common in AI responses)
+  // This replaces literal "\n", "\t" with actual whitespace or removes them
+  cleaned = cleaned.replace(/\\n/g, ' ').replace(/\\t/g, ' ').replace(/\\/g, '');
+
+
+  try {
+    // 4. Try direct parse
+    return JSON.parse(cleaned);
+  } catch (e) {
+    // 5. Fallback: Extract JSON object if embedded in text
+    try {
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const jsonCandidate = cleaned.substring(firstBrace, lastBrace + 1);
+        return JSON.parse(jsonCandidate);
+      }
+    } catch (e2) {
+      // console.warn("Failed to parse JSON, returning null", e);
+    }
+    return null;
+  }
+};
+
 export default function Home() {
   const [selectedYear, setSelectedYear] = useState(2026);
   const [focusedLocation, setFocusedLocation] = useState<{ lat: number, lng: number } | null>(null); // State for Map flyTo
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [selectedState, setSelectedState] = useState<string | null>(null);
+  const [relatedState, setRelatedState] = useState<string | null>(null); // For flags (e.g., Empire name when viewing a city)
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<'analysis' | 'demographics' | 'sources'>('analysis');
@@ -78,6 +119,10 @@ export default function Home() {
     if (supabase) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         setCurrentUser(session?.user || null);
+      }).catch((err) => {
+        if (err.name !== 'AbortError' && err.message !== 'signal is aborted without reason') {
+          console.warn('Auth session check failed:', err);
+        }
       });
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         setCurrentUser(session?.user || null);
@@ -223,6 +268,7 @@ export default function Home() {
 
   const handleStateClick = async (stateName: string) => {
     setSelectedState(stateName);
+    setRelatedState(null); // Reset related state
     setAiPanelOpen(true);
     setAiAnalysis('');
     setIsAnalyzing(true);
@@ -245,20 +291,19 @@ export default function Home() {
       const analizMatch = fullResponse.match(/<ANALIZ>([\s\S]*?)<\/ANALIZ>/);
       const demografiMatch = fullResponse.match(/<DEMOGRAFI>([\s\S]*?)<\/DEMOGRAFI>/);
       const kaynaklarMatch = fullResponse.match(/<KAYNAKLAR>([\s\S]*?)<\/KAYNAKLAR>/);
+      const devletMatch = fullResponse.match(/<DEVLET>([\s\S]*?)<\/DEVLET>/);
 
       const analizText = analizMatch ? analizMatch[1].trim() : fullResponse;
       const demografiText = demografiMatch ? demografiMatch[1].trim() : null;
       const kaynaklarText = kaynaklarMatch ? kaynaklarMatch[1].trim() : null;
+      const devletText = devletMatch ? devletMatch[1].trim() : null;
+
+      if (devletText && devletText !== 'Bilinmiyor') {
+        setRelatedState(devletText);
+      }
 
       // Process Demographics
-      let demographicsData = null;
-      if (demografiText) {
-        try {
-          demographicsData = JSON.parse(demografiText);
-        } catch (e) {
-          console.error("Failed to parse demographics JSON", e);
-        }
-      }
+      let demographicsData = safeJSONParse(demografiText || '');
 
       // Process Sources
       let sourcesList: string[] = [];
@@ -298,6 +343,7 @@ export default function Home() {
   const handlePlaceClick = async (place: any) => {
     // Open AI Panel with Place Info
     setSelectedState(place.name); // Title of the panel
+    setRelatedState(null); // Reset related state
 
     // Determine data source (Supabase 'historical_data' or place properties)
     const placeInfo = place.historical_data || {};
@@ -387,22 +433,19 @@ export default function Home() {
         const analizMatch = fullResponse.match(/<ANALIZ>([\s\S]*?)<\/ANALIZ>/);
         const demografiMatch = fullResponse.match(/<DEMOGRAFI>([\s\S]*?)<\/DEMOGRAFI>/);
         const kaynaklarMatch = fullResponse.match(/<KAYNAKLAR>([\s\S]*?)<\/KAYNAKLAR>/);
+        const devletMatch = fullResponse.match(/<DEVLET>([\s\S]*?)<\/DEVLET>/);
 
         const analizText = analizMatch ? analizMatch[1].trim() : fullResponse; // Fallback to full text if no tags
         const demografiText = demografiMatch ? demografiMatch[1].trim() : null;
         const kaynaklarText = kaynaklarMatch ? kaynaklarMatch[1].trim() : null;
+        const devletText = devletMatch ? devletMatch[1].trim() : null;
+
+        if (devletText && devletText !== 'Bilinmiyor') {
+          setRelatedState(devletText);
+        }
 
         // Process Demographics
-        let demographicsData = null;
-        if (demografiText) {
-          try {
-            // Clean markdown code blocks if present
-            const cleanJson = demografiText.replace(/```json/g, '').replace(/```/g, '').trim();
-            demographicsData = JSON.parse(cleanJson);
-          } catch (e) {
-            console.error("Failed to parse demographics JSON", e, demografiText);
-          }
-        }
+        let demographicsData = safeJSONParse(demografiText || '');
 
         // Process Sources
         let sourcesList: string[] = [];
@@ -630,14 +673,14 @@ export default function Home() {
                 setSelectedEvent(null);
               }
             }}
-            className={`p-2 md:px-4 md:py-2.5 rounded-full transition-all flex items-center gap-2 backdrop-blur-md border ${isHistoryMode
+            className={`px-3 py-1.5 md:px-4 md:py-2.5 rounded-full transition-all flex items-center gap-1.5 md:gap-2 backdrop-blur-md border ${isHistoryMode
               ? 'bg-amber-500/20 border-amber-500/50 text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
               : 'bg-[var(--panel-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-amber-500/30 hover:text-amber-500'
               }`}
             title="Tarih Modu"
           >
-            <Scroll className="w-4 h-4 md:w-5 md:h-5" />
-            <span className="hidden md:block text-sm font-medium">
+            <Scroll className="w-3.5 h-3.5 md:w-5 md:h-5" />
+            <span className="text-[10px] md:text-sm font-medium block whitespace-nowrap">
               Tarih Modu
             </span>
             {isHistoryMode && (
@@ -669,9 +712,9 @@ export default function Home() {
             initial={{ x: 400 }}
             animate={{ x: 0 }}
             exit={{ x: 400 }}
-            className="absolute top-0 right-0 w-96 h-full bg-[var(--panel-bg)] backdrop-blur-md border-l border-[var(--border-color)] p-6 shadow-2xl z-50 text-[var(--text-primary)]"
+            className="fixed top-0 right-0 bottom-0 w-full md:w-[320px] bg-[var(--panel-bg)] backdrop-blur-xl border-l border-[var(--border-color)] shadow-2xl z-50 p-5 flex flex-col"
           >
-            <div className="flex justify-between items-center mb-4 border-b border-[var(--border-color)] pb-4">
+            <div className="flex justify-between items-start mb-6">
               <div className="flex items-center gap-2">
                 <Bot className="text-[var(--accent-primary)]" size={24} />
                 <h2 className="text-xl font-bold bg-gradient-to-r from-[var(--accent-primary)] to-blue-500 bg-clip-text text-transparent">
@@ -689,7 +732,7 @@ export default function Home() {
                 <div className="mb-4">
                   <div className="flex items-center gap-3 mb-2">
                     {(() => {
-                      const stateData = getStateData(selectedState);
+                      const stateData = getStateData(relatedState || selectedState);
                       return stateData?.flagUrl ? (
                         <img
                           src={stateData.flagUrl}
@@ -849,78 +892,83 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Normal Timeline Control Panel - ONLY in Default Mode */}
-      {!isHistoryMode && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl bg-[var(--panel-bg)] backdrop-blur-xl border border-[var(--border-color)] rounded-xl p-3 shadow-2xl z-40">
-          <div className="flex flex-col items-center">
-            <div className="flex items-baseline gap-2 mb-1">
-              <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[var(--accent-primary)] to-blue-600 drop-shadow-sm">
-                {selectedYear < 0 ? `M.Ö. ${Math.abs(selectedYear)}` : selectedYear}
-              </span>
-              <span className="text-[10px] text-[var(--text-muted)] tracking-widest uppercase">Seçili Dönem</span>
-            </div>
+      {
+        !isHistoryMode && (
+          <div
+            className="absolute bottom-6 left-1/2 -translate-x-1/2 transition-all duration-300 w-[90%] md:w-[60%] lg:w-[50%] max-w-4xl z-40"
+          >
+            <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-full px-6 py-3 flex items-center gap-4 shadow-2xl">
 
-            <div className="w-full relative h-10 px-2 mt-1">
-              {/* Slider */}
-              <input
-                type="range"
-                min="-1000"
-                max="2026"
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="w-full h-1.5 bg-[var(--surface-bg)] rounded-lg appearance-none cursor-pointer accent-[var(--accent-primary)] hover:accent-[var(--accent-primary)] transition-all z-20 relative history-timeline-slider"
-              />
+              {/* Year Display */}
+              <div className="flex flex-col items-start min-w-[80px]">
+                <span className="text-xl font-bold text-white leading-none">
+                  {selectedYear < 0 ? `M.Ö. ${Math.abs(selectedYear)}` : selectedYear}
+                </span>
+                <span className="text-[9px] text-slate-400 uppercase tracking-widest">Dönem</span>
+              </div>
 
-              {/* Marks */}
-              <div className="absolute top-4 left-2 right-2 h-4 pointer-events-none">
-                {timelineMarks.map((mark) => {
-                  const min = -1000;
-                  const max = 2026;
-                  const range = max - min;
-                  const percent = ((mark.year - min) / range) * 100;
-                  const near = Math.abs(selectedYear - mark.year) < 100;
+              {/* Slider Container */}
+              <div className="relative flex-1 h-8 flex items-center">
 
-                  return (
-                    <div
-                      key={mark.year}
-                      className="absolute flex flex-col items-center top-0 transform -translate-x-1/2 cursor-pointer pointer-events-auto"
-                      style={{ left: `${percent}%` }}
-                      onClick={() => setSelectedYear(mark.year)}
-                    >
-                      <div className={`w-0.5 h-1.5 mb-1 ${near ? 'bg-[var(--accent-primary)]' : 'bg-[var(--text-muted)]'}`} />
-                      <span className={`text-[10px] whitespace-nowrap ${near ? 'text-[var(--accent-primary)] font-bold' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
-                        {mark.label}
-                      </span>
-                    </div>
-                  );
-                })}
+                {/* Slider Track and Input */}
+                <input
+                  type="range"
+                  min="-1000"
+                  max="2026"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-yellow-400 z-20 relative history-timeline-slider"
+                />
 
-                {/* Dynamic History Markers */}
-                {placeHistory.map((entry, idx) => {
-                  const min = -1000;
-                  const max = 2026;
-                  const range = max - min;
-                  const percent = Math.max(0, Math.min(100, ((entry.startYear - min) / range) * 100));
-                  const isActive = selectedYear >= entry.startYear && selectedYear <= entry.endYear;
+                {/* Marks (Tick Marks) */}
+                <div className="absolute inset-x-0 h-full pointer-events-none">
+                  {timelineMarks.map((mark) => {
+                    const min = -1000;
+                    const max = 2026;
+                    const range = max - min;
+                    const percent = ((mark.year - min) / range) * 100;
+                    const near = Math.abs(selectedYear - mark.year) < 100;
 
-                  return (
-                    <div
-                      key={`history-${idx}`}
-                      className="absolute top-[-12px] transform -translate-x-1/2 cursor-pointer group z-30"
-                      style={{ left: `${percent}%` }}
-                      onClick={() => setSelectedYear(entry.startYear)}
-                    >
-                      <div className={`w-2 h-2 rounded-full border border-[var(--card-bg)] transition-all ${isActive ? 'bg-[var(--accent-primary)] scale-150 shadow-[0_0_8px_var(--accent-glow)]' : 'bg-slate-500 hover:bg-cyan-300'}`} />
-                      <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-[var(--card-bg)] text-[var(--text-primary)] text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-[var(--border-color)]">
-                        {entry.name} ({entry.startYear})
+                    return (
+                      <div
+                        key={mark.year}
+                        className="absolute top-1/2 -translate-y-1/2 transform -translate-x-1/2 flex flex-col items-center pointer-events-auto cursor-pointer group"
+                        style={{ left: `${percent}%` }}
+                        onClick={() => setSelectedYear(mark.year)}
+                      >
+                        <div className={`w-1 h-1 rounded-full mb-2 ${near ? 'bg-yellow-400 scale-150' : 'bg-slate-500 group-hover:bg-slate-300'} transition-all`} />
+                        <span className={`absolute top-4 text-[9px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity ${near ? 'text-yellow-400 opacity-100' : 'text-slate-400'}`}>
+                          {mark.label}
+                        </span>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+
+                  {/* Dynamic History Markers (Search Results) */}
+                  {placeHistory.map((entry, idx) => {
+                    const min = -1000;
+                    const max = 2026;
+                    const range = max - min;
+                    const percent = Math.max(0, Math.min(100, ((entry.startYear - min) / range) * 100));
+
+                    return (
+                      <div
+                        key={`history-${idx}`}
+                        className="absolute top-1/2 -translate-y-1/2 transform -translate-x-1/2 z-30 cursor-pointer"
+                        style={{ left: `${percent}%` }}
+                        onClick={() => setSelectedYear(entry.startYear)}
+                        title={`${entry.name} (${entry.startYear})`}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-cyan-400 border border-slate-900 shadow-[0_0_8px_rgba(34,211,238,0.5)] animate-pulse" />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
     </main >
   );
 }

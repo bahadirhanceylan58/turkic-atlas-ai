@@ -158,37 +158,10 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   const [selectedPlace, setSelectedPlace] = React.useState<any>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
-
-    const fetchPlaces = async () => {
-      if (!supabase) return;
-      try {
-        const { data, error } = await supabase
-          .from('places')
-          .select('*')
-          .abortSignal(controller.signal);
-
-        if (error) {
-          // Ignore abort errors
-          if (error.code !== '20' && !error.message.includes("AbortError")) { // 20 is Postgres Abort check? Actually Supabase JS throws object.
-            console.error('Error fetching places:', error.message || error);
-          }
-        } else {
-          setPlaces(data || []);
-          console.log("🔍 Supabase Veri Kontrolü: Mekanlar yüklendi.");
-        }
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.error('Unexpected error fetching places:', err);
-        }
-      }
-    };
-
-    fetchPlaces();
-
-    return () => {
-      controller.abort();
-    };
+    // Only fetch places if the user explicitly wants to see modern places (which they don't right now).
+    // User requested to remove "blue dots" (districts/cities).
+    // So we skip fetching from Supabase 'places' for the map view.
+    setPlaces([]);
   }, []);
 
   // Animation Ref
@@ -236,20 +209,25 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   const { theme } = useTheme();
 
   // Map Style State
-  // Default to 'political' (Light) or 'dark' based on theme
-  const [mapStyle, setMapStyle] = React.useState<'dark' | 'political' | 'satellite'>('political');
+  // Default to 'satellite' (Fiziki)
+  const [mapStyle, setMapStyle] = React.useState<'dark' | 'political' | 'satellite'>('satellite');
   const [isStyleMenuOpen, setIsStyleMenuOpen] = React.useState(false);
 
-  // Sync map style with theme
+  // Sync map style with theme (but respect user preference if they switch)
+  // For initial load, we want Satellite.
   useEffect(() => {
     if (historyMode) {
       setMapStyle('political'); // Force white/light theme in History Mode
-    } else if (theme === 'dark') {
-      setMapStyle('dark');
     } else {
-      setMapStyle('political'); // Light
+      // If not history mode, keep satellite as default unless user changed it?
+      // Or if theme changes, do we switch?
+      // Let's stick to 'satellite' as the base for now unless logic requires otherwise.
+      // If the user explicitly wants theme sync:
+      // if (theme === 'dark' && mapStyle !== 'satellite') setMapStyle('dark');
+      // For now, let's prioritize 'satellite' on mount.
+      setMapStyle('satellite');
     }
-  }, [theme, historyMode]);
+  }, [historyMode]); // Removed [theme] dependency to stop overriding satellite on theme change, unless desired.
 
   const mapStyleUrl = useMemo(() => {
     switch (mapStyle) {
@@ -440,7 +418,8 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
       if (isNaN(lng) || isNaN(lat)) return null;
 
       // Time Machine Logic
-      if (place.type === 'village' && selectedYear <= 1920) return null; // Show villages only after 1920
+      // Time Machine Logic
+      if (place.type === 'village') return null; // Villages hidden by user request
 
       if (place.type === 'battle') {
         const battleYear = place.year || (place.historical_data?.year);
@@ -472,15 +451,16 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   const placesPointLayer: any = useMemo(() => ({
     id: 'places-point',
     type: 'circle',
-    minzoom: 8, // Don't show when zoomed out
+    minzoom: 5, // Show when zoomed out (default zoom is 5)
     paint: {
-      'circle-radius': 6,
+      'circle-radius': 4,
       'circle-color': [
         'match',
         ['get', 'type'],
         'village', '#FDD835',
+        'district', '#FDD835', // Yellow for districts
         'battle', '#FF0000',
-        'city', '#3FB1CE',
+        'city', '#3FB1CE', // Blue for cities
         '#3FB1CE' // default
       ],
       'circle-stroke-width': 2,
@@ -571,6 +551,46 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   }, [historyMode, mapStyle]);
 
   const onMapClick = (event: any) => {
+    // 1. Check for Historical City Labels (Priority)
+    const clickedFeatures = event.features || [];
+    const historicalLabel = clickedFeatures.find((f: any) => f.layer.id === 'historical-city-labels');
+
+    if (historicalLabel) {
+      const props = historicalLabel.properties;
+      const coords = historicalLabel.geometry.coordinates; // [lng, lat]
+
+      // Adjust center for mobile: If panel opens at bottom, we need to shift view North (so target moves South)? 
+      // User says "Gidip Tokat'a odaklanıyor" (Focuses North of Sivas).
+      // If Focus is North, Sivas is South (Bottom).
+      // If panel covers bottom, Sivas is hidden.
+      // So we need to shift the *Camera* SOUTH, so Sivas moves NORTH (Up).
+      // Shifting Camera South = Decrease Latitude.
+      // Let's use padding option instead of manual calculation for better stability.
+
+      const isMobile = window.innerWidth < 768; // Simple check
+
+      mapRef.current?.flyTo({
+        center: [coords[0], coords[1]],
+        zoom: 10,
+        duration: 1000,
+        padding: isMobile ? { bottom: 300, top: 0, left: 0, right: 0 } : { bottom: 0, top: 0, left: 0, right: 0 }
+        // Bottom padding moves the "center" up visually, keeping the target in the top open area.
+      });
+
+      if (onPlaceClick) {
+        onPlaceClick({
+          name: props.historicalName,
+          lat: coords[1],
+          lng: coords[0],
+          type: 'historical-city',
+          modernName: props.modernName,
+          civilization: props.civilization,
+        });
+      }
+      return;
+    }
+
+    // 2. Rendered Feature Logic (States, Places)
     const feature = event.features?.[0];
     if (feature) {
 
@@ -594,19 +614,18 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
       // Fly to the clicked feature (States) - Supports both legacy and new layers
       if (feature.layer.id === 'states-fill' || feature.layer.id === 'world-states-fill') {
         const stateName = feature.properties.name || feature.properties.NAME || feature.properties.Name;
-        if (stateName) {
-          // Try to find a specific coordinate for this state/city name in our historical database
-          // This fixes the issue of clicking "Sivas" and flying to "Tokat" (random point in polygon)
-          const targetCity = HISTORICAL_CITIES.find(c =>
-            c.modernName.toLowerCase() === stateName.toLowerCase() ||
-            c.names.some(n => n.name.toLowerCase() === stateName.toLowerCase())
-          );
 
-          mapRef.current?.flyTo({
-            center: targetCity ? [targetCity.lng, targetCity.lat] : event.lngLat,
-            zoom: targetCity ? 9 : 7, // Zoom in closer if we have a specific city
-            duration: 1500
-          });
+        const isMobile = window.innerWidth < 768;
+
+        mapRef.current?.flyTo({
+          center: [event.lngLat.lng, event.lngLat.lat], // Fly to where user actually clicked
+          zoom: mapRef.current.getMap().getZoom() > 7 ? mapRef.current.getMap().getZoom() : 7,
+          duration: 1000,
+          essential: true,
+          padding: isMobile ? { bottom: 300, top: 0, left: 0, right: 0 } : { bottom: 0, top: 0, left: 0, right: 0 }
+        });
+
+        if (stateName) {
           onStateClick(stateName);
         }
       }
@@ -642,56 +661,10 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           'provinces-fill',
           'districts-fill-click',
           'places-point',
-          'places-label'
+          'places-label',
+          'historical-city-labels'
         ]}
-        onClick={(e) => {
-          if (isAddMode) {
-            setAddLocation({ lat: e.lngLat.lat, lng: e.lngLat.lng });
-            return;
-          }
-
-          // Check for ANY Mapbox label at click point (only when zoomed in enough)
-          const map = mapRef.current?.getMap();
-          const currentZoom = map?.getZoom() || 0;
-          if (map && onPlaceClick && currentZoom >= 8) {
-            // Query ALL rendered features at click point (no layer filter)
-            const allFeatures = map.queryRenderedFeatures(e.point);
-
-            // Find the first feature with a name (prefer symbol/label layers)
-            const labelFeature = allFeatures.find((f: any) =>
-              f.layer?.type === 'symbol' && (f.properties?.name || f.properties?.name_tr)
-            );
-
-            if (labelFeature) {
-              const placeName = labelFeature.properties?.name || labelFeature.properties?.name_tr || labelFeature.properties?.name_en;
-              if (placeName) {
-                console.log('📍 Label clicked:', placeName, labelFeature.layer?.id);
-
-                // Determine target coordinates
-                let targetCenter: [number, number] = [e.lngLat.lng, e.lngLat.lat];
-                if (labelFeature.geometry?.type === 'Point') {
-                  const coords = (labelFeature.geometry as any).coordinates;
-                  targetCenter = [coords[0], coords[1]];
-                }
-
-                mapRef.current?.flyTo({
-                  center: targetCenter,
-                  zoom: Math.max(currentZoom, 10),
-                  duration: 800
-                });
-                onPlaceClick({
-                  name: placeName,
-                  lat: e.lngLat.lat,
-                  lng: e.lngLat.lng,
-                  type: labelFeature.properties?.class || labelFeature.properties?.type || 'settlement',
-                });
-                return;
-              }
-            }
-          }
-
-          onMapClick(e);
-        }}
+        onClick={onMapClick}
         onLoad={() => {
           const map = mapRef.current?.getMap();
           if (!map) return;
@@ -704,27 +677,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
             updateLayerVisibility(map);
           });
 
-          // Click handler for historical city labels
-          map.on('click', 'historical-city-labels', (e: any) => {
-            if (!e.features || e.features.length === 0) return;
-            const props = e.features[0].properties;
-            const coords = e.features[0].geometry.coordinates;
-            if (onPlaceClick) {
-              onPlaceClick({
-                name: props.historicalName,
-                lat: coords[1],
-                lng: coords[0],
-                type: 'historical-city',
-                modernName: props.modernName,
-                civilization: props.civilization,
-              });
-            }
-            mapRef.current?.flyTo({
-              center: coords,
-              zoom: 8,
-              duration: 1000,
-            });
-          });
+
 
           // Pointer cursor on hover
           map.on('mouseenter', 'historical-city-labels', () => {
@@ -868,7 +821,13 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
 
 
 
-        {/* Supabase Markers — hidden, Mapbox built-in labels used instead */}
+        {/* Supabase Markers — Restored */}
+        {placesGeoJSON && (
+          <Source id="places-data" type="geojson" data={placesGeoJSON}>
+            <Layer {...placesPointLayer} />
+            <Layer {...placesLabelLayer} />
+          </Source>
+        )}
 
         {/* Selected Place Popup */}
         {selectedPlace && (() => {
