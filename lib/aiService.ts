@@ -17,14 +17,15 @@ async function fetchFromApi<T>(endpoint: string, body: any): Promise<T> {
     return data.result;
 }
 
-export async function generateHistoryAnalysis(stateName: string, year: number, location?: { lat: number, lng: number }, district?: string, knownHistoricalName?: string): Promise<string> {
+export async function generateHistoryAnalysis(stateName: string, year: number, location?: { lat: number, lng: number }, district?: string, knownHistoricalName?: string, extraMetadata?: any): Promise<string> {
     try {
         return await fetchFromApi<string>('/api/ai/analyze-history', {
             stateName,
             year,
             location,
             district,
-            knownHistoricalName
+            knownHistoricalName,
+            extraMetadata
         });
     } catch (error: any) {
         console.error("AI Service Error:", error);

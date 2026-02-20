@@ -9,6 +9,10 @@ import AddPlaceModal from './AddPlaceModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getCitiesForYear, HISTORICAL_CITIES } from '@/lib/historicalCityNames';
 import { CULTURAL_HERITAGE_DATA } from '@/lib/culturalHeritageData';
+import { isTurkicState } from '@/lib/turkicStates';
+import { getTranslatedName } from '@/lib/stateTranslations';
+import { getModernTurkicGeoJSON } from '@/lib/modernTurkicPopulations';
+import { getTurkicTribesGeoJSON } from '@/lib/turkicTribesData';
 import { useTheme } from '@/components/ThemeProvider';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -25,9 +29,27 @@ interface MapBlockProps {
   isAdmin?: boolean;
   showAncientSites?: boolean;
   showCulturalHeritage?: boolean;
+  showTradeRoutes?: boolean;
+  activeFilters?: string[];
+  turkicOnly?: boolean;
+  onTurkicToggle?: () => void;
+  showModernHeatmap?: boolean;
+  onModernHeatmapToggle?: () => void;
+  showTurkicTribes?: boolean;
+  onTurkicTribesToggle?: () => void;
+  selectedTribe?: string | null;
+  setSelectedTribe?: (tribe: string | null) => void;
 }
 
-const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onPlaceClick, focusedLocation, historyMode = false, historicalEvents = [], onHistoricalEventClick, isAdmin = false, showAncientSites = true, showCulturalHeritage = true }) => {
+const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onPlaceClick, focusedLocation, historyMode = false, historicalEvents = [], onHistoricalEventClick, isAdmin = false, showAncientSites = true, showCulturalHeritage = true, showTradeRoutes = true, activeFilters = [], turkicOnly = false,
+  onTurkicToggle,
+  showModernHeatmap = false,
+  onModernHeatmapToggle,
+  showTurkicTribes = false,
+  onTurkicTribesToggle,
+  selectedTribe = null,
+  setSelectedTribe
+}) => {
   const mapRef = React.useRef<any>(null);
 
   // Manual Entry State
@@ -90,7 +112,6 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   const [loadedMapYear, setLoadedMapYear] = React.useState<number | null>(null);
   const mapCache = React.useRef<{ [key: number]: any }>({});
 
-  // Historical City Names - compute visible cities for the selected year
   const { visibleCities, ancientSites } = useMemo(() => {
     if (!historyMode) return { visibleCities: [], ancientSites: [] };
     const all = getCitiesForYear(selectedYear);
@@ -99,6 +120,12 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
       ancientSites: all.filter(c => c.type === 'ancient_site')
     };
   }, [historyMode, selectedYear]);
+
+  // Modern Turkic Populations Data
+  const modernTurkicData = useMemo(() => getModernTurkicGeoJSON(), []);
+
+  // Turkic Tribes (Boylar) Data
+  const turkicTribesData = useMemo(() => getTurkicTribesGeoJSON(selectedTribe || undefined), [selectedTribe]);
 
   // Fetch Full World Map on Year Change
   React.useEffect(() => {
@@ -128,14 +155,17 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
 
         // Pre-process to add color property based on name
         data.features = data.features.map((f: any) => {
-          const name = f.properties.NAME || f.properties.name || f.properties.Name || "Unknown";
+          const rawName = f.properties.NAME || f.properties.name || f.properties.Name || "Unknown";
+          const translatedName = getTranslatedName(rawName);
+
           return {
             ...f,
             properties: {
               ...f.properties,
-              // Generate a consistent color
-              generated_color: stringToColor(name),
-              name: name // standardize name key
+              // Generate a consistent color from original name
+              generated_color: stringToColor(rawName),
+              name: translatedName, // Use translated/formatted name for map labels
+              is_turkic: isTurkicState(rawName)
             }
           };
         });
@@ -554,6 +584,35 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
     // 1. Check for Historical City Labels & Custom Annotations (Priority)
     const clickedFeatures = event.features || [];
 
+    // Check for Historical Events (Battles/Treaties)
+    const eventLabel = clickedFeatures.find((f: any) => f.layer.id === 'historical-events-labels' || f.layer.id === 'historical-events-glow');
+    if (eventLabel && onHistoricalEventClick) {
+      const props = eventLabel.properties;
+      const coords = eventLabel.geometry.coordinates; // [lng, lat]
+      const isMobile = window.innerWidth < 768;
+
+      mapRef.current?.flyTo({
+        center: [coords[0], coords[1]],
+        zoom: 7,
+        duration: 1000,
+        padding: isMobile ? { bottom: 300, top: 0, left: 0, right: 0 } : { bottom: 0, top: 0, left: 0, right: 0 }
+      });
+
+      onHistoricalEventClick({
+        id: props.id,
+        name: props.name,
+        year: props.year,
+        type: props.type,
+        lat: coords[1],
+        lng: coords[0],
+        parties: JSON.parse(props.parties || '[]'),
+        result: props.result,
+        source: props.source,
+        importance: props.importance
+      });
+      return;
+    }
+
     // Check for Cultural Heritage
     const culturalLabel = clickedFeatures.find((f: any) => f.layer.id === 'cultural-heritage-labels' || f.layer.id === 'cultural-heritage-glow');
     if (culturalLabel) {
@@ -583,7 +642,66 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
       return;
     }
 
-    const historicalLabel = clickedFeatures.find((f: any) => f.layer.id === 'historical-city-labels' || f.layer.id === 'ancient-sites-labels');
+    // Check for Modern Turkic Populations Heatmap Labels
+    const modernTurkicLabel = clickedFeatures.find((f: any) => f.layer.id === 'modern-turkic-labels');
+    if (modernTurkicLabel) {
+      const props = modernTurkicLabel.properties;
+      const coords = modernTurkicLabel.geometry.coordinates;
+      const isMobile = window.innerWidth < 768;
+
+      mapRef.current?.flyTo({
+        center: [coords[0], coords[1]],
+        zoom: 7,
+        duration: 1000,
+        padding: isMobile ? { bottom: 300, top: 0, left: 0, right: 0 } : { bottom: 0, top: 0, left: 0, right: 0 }
+      });
+
+      if (onPlaceClick) {
+        onPlaceClick({
+          id: props.id,
+          name: props.name,
+          type: 'modern_turkic', // Helper for AI Context
+          lat: coords[1],
+          lng: coords[0],
+          region: props.region,
+          country: props.country,
+          population: props.population,
+          description: props.description,
+          isCustom: true // Treat as custom so the AI prompt isn't confused
+        });
+      }
+      return;
+    }
+
+    // Check for Turkic Tribes (Boylar) Labels/Points
+    const tribeFeature = clickedFeatures.find((f: any) =>
+      f.layer.id === 'turkic-tribes-labels' || f.layer.id === 'turkic-tribes-points'
+    );
+    if (tribeFeature) {
+      const props = tribeFeature.properties;
+      const coords = tribeFeature.geometry.coordinates;
+      const isMobile = window.innerWidth < 768;
+
+      mapRef.current?.flyTo({
+        center: [coords[0], coords[1]],
+        zoom: 9,
+        duration: 1000,
+        padding: isMobile ? { bottom: 300, top: 0, left: 0, right: 0 } : { bottom: 0, top: 0, left: 0, right: 0 }
+      });
+
+      if (onPlaceClick) {
+        onPlaceClick({
+          ...props,
+          type: 'turkic_tribe', // Specific type for AI context
+          isCustom: true,
+          lat: coords[1],
+          lng: coords[0]
+        });
+      }
+      return;
+    }
+
+    const historicalLabel = clickedFeatures.find((f: any) => f.layer.id === 'historical-city-labels' || f.layer.id === 'ancient-sites-labels' || f.layer.id === 'ancient-sites-glow');
 
     if (historicalLabel) {
       const props = historicalLabel.properties;
@@ -604,7 +722,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           name: props.historicalName || props.name,
           lat: coords[1],
           lng: coords[0],
-          type: historicalLabel.layer.id === 'ancient-sites-labels' ? 'ancient-site' : 'historical-city',
+          type: (historicalLabel.layer.id === 'ancient-sites-labels' || historicalLabel.layer.id === 'ancient-sites-glow') ? 'ancient-site' : 'historical-city',
           modernName: props.modernName,
           civilization: props.civilization,
           period: props.period,
@@ -613,7 +731,44 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
       return;
     }
 
-    // 2. Rendered Feature Logic (States, Places)
+    // 2. Mapbox Default Labels (Modern Map Places)
+    const mapboxLabel = clickedFeatures.find((f: any) =>
+      f.layer.id.includes('settlement-label') ||
+      f.layer.id.includes('settlement-major-label') ||
+      f.layer.id.includes('settlement-minor-label') ||
+      f.layer.id.includes('settlement-subdivision-label') ||
+      f.layer.id.includes('poi-label') ||
+      f.layer.id.includes('country-label') ||
+      f.layer.id.includes('state-label') ||
+      f.layer.id.includes('place-') // for older mapbox styles
+    );
+
+    if (mapboxLabel) {
+      const props = mapboxLabel.properties;
+      const name = props.name || props.name_en || props.name_tr;
+
+      if (name) {
+        const isMobile = window.innerWidth < 768;
+        mapRef.current?.flyTo({
+          center: [event.lngLat.lng, event.lngLat.lat],
+          zoom: mapRef.current.getMap().getZoom() > 10 ? mapRef.current.getMap().getZoom() : 10,
+          duration: 1000,
+          padding: isMobile ? { bottom: 300, top: 0, left: 0, right: 0 } : { bottom: 0, top: 0, left: 0, right: 0 }
+        });
+
+        if (onPlaceClick) {
+          onPlaceClick({
+            name: name,
+            lat: event.lngLat.lat,
+            lng: event.lngLat.lng,
+            type: 'modern-place'
+          });
+        }
+        return;
+      }
+    }
+
+    // 3. Rendered Feature Logic (States, Places)
     const feature = event.features?.[0];
     if (feature) {
 
@@ -686,9 +841,27 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           'places-point',
           'places-label',
           'historical-city-labels',
+          'ancient-sites-glow',
           'ancient-sites-labels',
           'cultural-heritage-labels',
-          'cultural-heritage-glow'
+          'cultural-heritage-glow',
+          'historical-events-glow',
+          'historical-events-labels',
+          // Mapbox Default Layers
+          'settlement-label',
+          'settlement-major-label',
+          'settlement-minor-label',
+          'settlement-subdivision-label',
+          'poi-label',
+          'country-label',
+          'state-label',
+          'place-city-lg-n',
+          'place-city-lg-s',
+          'place-city-md-n',
+          'place-city-md-s',
+          'place-city-sm',
+          'place-town',
+          'place-village'
         ]}
         onClick={onMapClick}
         onLoad={() => {
@@ -712,6 +885,28 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           map.on('mouseleave', 'historical-city-labels', () => {
             map.getCanvas().style.cursor = '';
           });
+
+          // Pointer cursor for Modern Turkic points
+          map.on('mouseenter', 'modern-turkic-labels', () => {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+          map.on('mouseleave', 'modern-turkic-labels', () => {
+            map.getCanvas().style.cursor = '';
+          });
+
+          // Pointer cursor for Turkic Tribes points/labels
+          map.on('mouseenter', 'turkic-tribes-labels', () => {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+          map.on('mouseenter', 'turkic-tribes-points', () => {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+          map.on('mouseleave', 'turkic-tribes-labels', () => {
+            map.getCanvas().style.cursor = '';
+          });
+          map.on('mouseleave', 'turkic-tribes-points', () => {
+            map.getCanvas().style.cursor = '';
+          });
         }}
       >
         {/* Historical State Polygons — FULL WORLD HISTORY MODE */}
@@ -720,8 +915,13 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
             <Layer
               id="world-states-fill"
               type="fill"
+              filter={turkicOnly ? ['==', ['get', 'is_turkic'], true] : ['has', 'name']}
               paint={{
-                'fill-color': ['get', 'generated_color'],
+                'fill-color': [
+                  'case',
+                  ['==', ['get', 'name'], 'UNKNOWN'], '#ffffff',
+                  ['get', 'generated_color']
+                ],
                 'fill-opacity': 0.3, // Light opacity to blend with paper texture
                 'fill-outline-color': '#444' // Darker outline
               }}
@@ -730,6 +930,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
             <Layer
               id="world-states-outline"
               type="line"
+              filter={turkicOnly ? ['==', ['get', 'is_turkic'], true] : ['has', 'name']}
               paint={{
                 'line-color': '#555',
                 'line-width': 0.5,
@@ -740,12 +941,17 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
             <Layer
               id="world-states-label"
               type="symbol"
+              filter={turkicOnly ? ['==', ['get', 'is_turkic'], true] : ['has', 'name']}
               layout={{
-                'text-field': ['get', 'name'],
+                'text-field': [
+                  'case',
+                  ['==', ['get', 'name'], 'UNKNOWN'], '',
+                  ['get', 'name']
+                ],
                 'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
                 'text-size': 10,
                 'text-transform': 'uppercase',
-                'text-max-width': 8
+                'text-max-width': 12
               }}
               paint={{
                 'text-color': '#333', // Ink color
@@ -807,7 +1013,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
 
 
         {/* Trade Routes — ONLY in History Mode */}
-        {historyMode && (
+        {historyMode && showTradeRoutes && (
           <Source id="trade-routes-data" type="geojson" data="/data/trade-routes.json">
             <Layer
               id="trade-routes-line"
@@ -1018,6 +1224,17 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
                 }}
               >
                 <Layer
+                  id="ancient-sites-glow"
+                  type="circle"
+                  paint={{
+                    'circle-radius': 12,
+                    'circle-color': '#D2691E',
+                    'circle-blur': 0.6,
+                    'circle-opacity': 0.7
+                  }}
+                  minzoom={2}
+                />
+                <Layer
                   id="ancient-sites-labels"
                   type="symbol"
                   layout={{
@@ -1116,6 +1333,233 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           </Source>
         )}
 
+        {/* Modern Turkic Populations Heatmap Overlay */}
+        {showModernHeatmap && (
+          <Source id="modern-turkic-heatmap-data" type="geojson" data={modernTurkicData}>
+            <Layer
+              id="modern-turkic-heatmap-layer"
+              type="heatmap"
+              paint={{
+                // Increase the heatmap weight based on the population property
+                'heatmap-weight': [
+                  'interpolate',
+                  ['linear'],
+                  ['get', 'population'],
+                  10000, 0.1,    // Small pops are subtle
+                  1000000, 0.6,  // Mid pops
+                  15000000, 1.0  // Huge pops max weight
+                ],
+                // Heatmap intensity by zoom level
+                'heatmap-intensity': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  0, 1.2,
+                  5, 2.5,
+                  9, 4.0
+                ],
+                // Premium Fire/Magma Color ramp
+                'heatmap-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['heatmap-density'],
+                  0, 'rgba(0, 0, 0, 0)',
+                  0.1, 'rgba(51, 0, 0, 0.2)',     // Subtlest dark red
+                  0.3, 'rgba(153, 0, 0, 0.6)',    // Deep dark red
+                  0.5, 'rgba(238, 44, 44, 0.8)',  // Vibrant red
+                  0.7, 'rgba(255, 140, 0, 0.95)', // Bright orange
+                  0.9, 'rgba(255, 215, 0, 1)',    // Yellow/Gold core
+                  1, 'rgba(255, 255, 255, 1)'     // White hot center
+                ],
+                // Adjust the heatmap radius by zoom level
+                'heatmap-radius': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  0, 15,
+                  4, 30,
+                  9, 80
+                ],
+                // General opacity
+                'heatmap-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  3, 0.9,
+                  9, 0.6
+                ],
+              }}
+            />
+            {/* Added a subtle text label to weight centers */}
+            <Layer
+              id="modern-turkic-labels"
+              type="symbol"
+              layout={{
+                'text-field': ['get', 'name'],
+                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                'text-size': 12,
+                'text-anchor': 'top',
+                'text-offset': [0, 1]
+              }}
+              paint={{
+                'text-color': '#fff',
+                'text-halo-color': '#000',
+                'text-halo-width': 1,
+                'text-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  3, 0,
+                  5, 1
+                ]
+              }}
+            />
+          </Source>
+        )}
+
+        {/* Turkic Tribes (Boylar) Layer */}
+        {showTurkicTribes && (
+          <Source id="turkic-tribes-data" type="geojson" data={turkicTribesData}>
+            {/* Glow / Outer Circle */}
+            <Layer
+              id="turkic-tribes-glow"
+              type="circle"
+              paint={{
+                'circle-radius': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  3, 8,
+                  10, 20
+                ],
+                'circle-color': ['get', 'color'],
+                'circle-blur': 0.5,
+                'circle-opacity': 0.4
+              }}
+            />
+            {/* Inner Point */}
+            <Layer
+              id="turkic-tribes-points"
+              type="circle"
+              paint={{
+                'circle-radius': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  3, 3,
+                  10, 6
+                ],
+                'circle-color': ['get', 'color'],
+                'circle-stroke-width': 1,
+                'circle-stroke-color': '#fff'
+              }}
+            />
+            {/* Tribe Name Labels */}
+            <Layer
+              id="turkic-tribes-labels"
+              type="symbol"
+              layout={{
+                'text-field': ['get', 'name'],
+                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                'text-size': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  4, 10,
+                  10, 14
+                ],
+                'text-anchor': 'top',
+                'text-offset': [0, 1],
+                'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
+                'text-radial-offset': 0.8
+              }}
+              paint={{
+                'text-color': '#fff',
+                'text-halo-color': '#000',
+                'text-halo-width': 1.5,
+                'text-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  4, 0,
+                  6, 1
+                ]
+              }}
+            />
+          </Source>
+        )}
+
+        {/* Historical Events (Battles, Treaties) */}
+        {historyMode && historicalEvents && historicalEvents.length > 0 && (
+          <Source
+            id="historical-events-data"
+            type="geojson"
+            data={{
+              type: 'FeatureCollection',
+              features: historicalEvents
+                .filter(ev => {
+                  // Only show if close to selectedYear (e.g. +/- 50 years)
+                  if (Math.abs(ev.year - selectedYear) > 200) return false;
+                  // Filter by activeFilters if array is empty (meaning all active) or includes type
+                  if (activeFilters && activeFilters.length > 0 && ev.type && !activeFilters.includes(ev.type)) return false;
+                  return true;
+                })
+                .map((ev, idx) => ({
+                  type: 'Feature' as const,
+                  id: `event-${idx}`,
+                  geometry: {
+                    type: 'Point' as const,
+                    coordinates: [ev.lng, ev.lat],
+                  },
+                  properties: {
+                    id: ev.id,
+                    name: ev.name,
+                    year: ev.year,
+                    type: ev.type,
+                    parties: JSON.stringify(ev.parties || []),
+                    result: ev.result,
+                    source: ev.source,
+                    importance: ev.importance,
+                    label: `${ev.name}\n(${ev.year})`,
+                  },
+                })),
+            }}
+          >
+            <Layer
+              id="historical-events-glow"
+              type="circle"
+              paint={{
+                'circle-radius': ['match', ['get', 'type'], 'battle', 12, 10],
+                'circle-color': ['match', ['get', 'type'], 'battle', '#ef4444', '#3b82f6'],
+                'circle-blur': 0.6,
+                'circle-opacity': 0.8
+              }}
+              minzoom={3}
+            />
+            <Layer
+              id="historical-events-labels"
+              type="symbol"
+              layout={{
+                'text-field': ['get', 'label'],
+                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                'text-size': 11,
+                'text-anchor': 'top',
+                'text-offset': [0, 1.0],
+                'text-allow-overlap': false,
+                'icon-image': ['match', ['get', 'type'], 'battle', 'cross-11', 'marker-11'],
+                'icon-size': 1.0,
+                'icon-allow-overlap': true,
+              }}
+              paint={{
+                'text-color': '#ffffff',
+                'text-halo-color': ['match', ['get', 'type'], 'battle', '#7f1d1d', '#1e3a8a'],
+                'text-halo-width': 2,
+              }}
+              minzoom={3}
+            />
+          </Source>
+        )}
+
         {/* Manual Entry Marker (Preview) */}
         {
           addLocation && (
@@ -1190,10 +1634,103 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
                   <span>Fiziki (Uydu)</span>
                   {mapStyle === 'satellite' && <Check size={14} className="ml-auto" />}
                 </button>
+
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+
+        {/* Türk Dünyası Toggle (Standalone) - Only in History Mode */}
+        {historyMode && (
+          <button
+            onClick={onTurkicToggle}
+            className={`p-2.5 rounded-lg backdrop-blur-md border transition-all shadow-lg flex items-center justify-center relative group ${turkicOnly
+              ? 'bg-amber-500/20 text-amber-500 border-amber-500/50'
+              : 'bg-slate-900/80 text-slate-300 border-slate-700/50 hover:text-white hover:border-amber-500/50 hover:bg-slate-800'
+              }`}
+            title="Sadece Türk Dünyasını Göster"
+          >
+            {/* Göktürk / Wolf SVG */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="w-5 h-5"
+            >
+              <path d="M11.95 2C11.59 2 11.23 2.15 10.97 2.42C8.32 5.09 5 8.12 3.19 10.15C2.18 11.28 2.06 12.87 2.91 14.12C4.08 15.82 5.95 18 8.13 19.34C9.57 20.21 10.91 21.36 11.66 21.84L12 22.05L12.34 21.84C13.09 21.36 14.43 20.21 15.87 19.34C18.05 18 19.92 15.82 21.09 14.12C21.94 12.87 21.82 11.28 20.81 10.15C19 8.12 15.68 5.09 13.03 2.42C12.77 2.15 12.41 2 12.05 2H11.95ZM12 4.19C14.18 6.38 17.06 9.04 18.66 10.82C19.06 11.26 19.11 11.83 18.77 12.33C17.7 13.88 15.98 15.87 14.28 17.04C13.56 17.53 12.74 18.09 12 18.59C11.26 18.09 10.44 17.53 9.72 17.04C8.02 15.87 6.3 13.88 5.23 12.33C4.89 11.83 4.94 11.26 5.34 10.82C6.94 9.04 9.82 6.38 12 4.19Z" />
+              <path d="M12 7.5L10 11.5L7 12.5L9 15.5L8.5 19L12 17L15.5 19L15 15.5L17 12.5L14 11.5L12 7.5Z" />
+            </svg>
+
+            {/* Tooltip */}
+            <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white opacity-0 whitespace-nowrap pointer-events-none group-hover:opacity-100 transition-opacity">
+              Türk Dünyası Filtresi
+            </span>
+          </button>
+        )}
+
+        {/* Modern Turkic Populations Heatmap Toggle (Standalone) */}
+        <button
+          onClick={onModernHeatmapToggle}
+          className={`p-2.5 rounded-lg backdrop-blur-md border transition-all shadow-lg flex items-center justify-center relative group ${showModernHeatmap
+            ? 'bg-red-500/20 text-red-500 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+            : 'bg-slate-900/80 text-slate-300 border-slate-700/50 hover:text-white hover:border-red-500/50 hover:bg-slate-800'
+            }`}
+          title="Günümüz Türk Nüfus Yoğunluğu"
+        >
+          {/* Nomadic Tent / Otağ SVG */}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-5 h-5"
+          >
+            <path d="M12 2L2 10l0 12h20l0-12L12 2z" />
+            <path d="M15 22v-8a3 3 0 0 0-6 0v8" />
+            <path d="M7 14.5l-3-6" />
+            <path d="M17 14.5l3-6" />
+            <path d="M12 4v4" />
+          </svg>
+
+          {/* Tooltip */}
+          <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white opacity-0 whitespace-nowrap pointer-events-none group-hover:opacity-100 transition-opacity">
+            Günümüz Türk Nüfusu
+          </span>
+        </button>
+
+        {/* Turkic Tribes (Boylar) Toggle (Standalone) */}
+        <button
+          onClick={onTurkicTribesToggle}
+          className={`p-2.5 rounded-lg backdrop-blur-md border transition-all shadow-lg flex items-center justify-center relative group ${showTurkicTribes
+            ? 'bg-orange-500/20 text-orange-500 border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.3)]'
+            : 'bg-slate-900/80 text-slate-300 border-slate-700/50 hover:text-white hover:border-orange-500/50 hover:bg-slate-800'
+            }`}
+          title="Türk Boyları Yerleşimleri"
+        >
+          {/* Bow and Arrow / Tribe SVG */}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-5 h-5"
+          >
+            <path d="M12 2v20" />
+            <path d="M22 12l-6-6M22 12l-6 6M22 12H10" />
+            <path d="M12 2a10 10 0 0 0-10 10 10 10 0 0 0 10 10" />
+          </svg>
+
+          {/* Tooltip */}
+          <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white opacity-0 whitespace-nowrap pointer-events-none group-hover:opacity-100 transition-opacity">
+            Türk Boyları (Oğuz v.b)
+          </span>
+        </button>
       </div>
 
       {/* Manual Entry Marker (Preview) */}

@@ -26,6 +26,15 @@ export function getHistoricalName(city: HistoricalCity, year: number): { name: s
     if (match) {
         return { name: match.name, civilization: match.civilization };
     }
+
+    // For ancient sites: if current year is past their last recorded period, show them as ruins
+    if (city.type === 'ancient_site') {
+        const lastRecord = city.names.reduce((prev, current) => (prev.endYear > current.endYear) ? prev : current);
+        if (year > lastRecord.endYear) {
+            return { name: lastRecord.name + ' (Ören Yeri)', civilization: 'Harabe / Ören Yeri' };
+        }
+    }
+
     return null;
 }
 
@@ -208,6 +217,105 @@ export const HISTORICAL_CITIES: HistoricalCity[] = [
         names: [
             { name: 'Pergamon', startYear: -300, endYear: 700, civilization: 'Pergamon Krallığı / Roma' },
         ],
+    },
+    // ─── DÜNYA GENELİ ANTİK ÖREN YERLERİ (GLOBAL ANCIENT SITES) ───
+    {
+        आधुनिकAdı: 'Roma Forumu / Kolezyum', modernName: 'Roma',
+        lat: 41.8902, lng: 12.4922, type: 'ancient_site', period: 'Antik Roma',
+        names: [{ name: 'Roma', startYear: -753, endYear: 476, civilization: 'Roma İmparatorluğu' }]
+    },
+    {
+        modernName: 'Pompeii',
+        lat: 40.7486, lng: 14.4843, type: 'ancient_site', period: 'Antik Roma',
+        names: [{ name: 'Pompeii', startYear: -600, endYear: 79, civilization: 'Roma İmparatorluğu' }]
+    },
+    {
+        modernName: 'Atina Akropolisi',
+        lat: 37.9715, lng: 23.7267, type: 'ancient_site', period: 'Antik Yunan',
+        names: [{ name: 'Atina', startYear: -1400, endYear: 86, civilization: 'Yunan Şehir Devletleri' }]
+    },
+    {
+        modernName: 'Babil',
+        lat: 32.5363, lng: 44.4208, type: 'ancient_site', period: 'Mezopotamya',
+        names: [{ name: 'Babil', startYear: -2300, endYear: 141, civilization: 'Babil İmparatorluğu' }]
+    },
+    {
+        modernName: 'Ur',
+        lat: 30.9625, lng: 46.1044, type: 'ancient_site', period: 'Sümerler',
+        names: [{ name: 'Ur', startYear: -3800, endYear: -500, civilization: 'Sümer / Akad' }]
+    },
+    {
+        modernName: 'Persepolis',
+        lat: 29.9344, lng: 52.8913, type: 'ancient_site', period: 'Antik Pers',
+        names: [{ name: 'Parsa', startYear: -515, endYear: -330, civilization: 'Ahameniş İmparatorluğu' }]
+    },
+    {
+        modernName: 'Kartaca',
+        lat: 36.8529, lng: 10.3233, type: 'ancient_site', period: 'Fenike / Roma',
+        names: [
+            { name: 'Kartaca', startYear: -814, endYear: -146, civilization: 'Kartaca İmparatorluğu' },
+            { name: 'Colonia Julia Carthago', startYear: -44, endYear: 698, civilization: 'Roma / Bizans' }
+        ]
+    },
+    {
+        modernName: 'Gize Piramitleri',
+        lat: 29.9792, lng: 31.1342, type: 'ancient_site', period: 'Eski Mısır',
+        names: [{ name: 'Memfis', startYear: -2580, endYear: -332, civilization: 'Mısır Firavunları' }]
+    },
+    {
+        modernName: 'Luksor (Teb)',
+        lat: 25.6989, lng: 32.6395, type: 'ancient_site', period: 'Eski Mısır',
+        names: [{ name: 'Waset (Thebes)', startYear: -2000, endYear: 84, civilization: 'Yeni Krallık (Mısır)' }]
+    },
+    {
+        modernName: 'Petra',
+        lat: 30.3289, lng: 35.4402, type: 'ancient_site', period: 'Nebatiler',
+        names: [{ name: 'Raqmu (Petra)', startYear: -312, endYear: 106, civilization: 'Nebati Krallığı' }]
+    },
+    {
+        modernName: 'Teotihuacan',
+        lat: 19.6925, lng: -98.8438, type: 'ancient_site', period: 'Mezoamerika',
+        names: [{ name: 'Teotihuacan', startYear: -100, endYear: 550, civilization: 'Teotihuacan İmparatorluğu' }]
+    },
+    {
+        modernName: 'Chichen Itza',
+        lat: 20.6842, lng: -88.5677, type: 'ancient_site', period: 'Maya',
+        names: [{ name: 'Chichen Itza', startYear: 600, endYear: 1200, civilization: 'Maya Uygarlığı' }]
+    },
+    {
+        modernName: 'Machu Picchu',
+        lat: -13.1631, lng: -72.5449, type: 'ancient_site', period: 'İnka',
+        names: [{ name: 'Machu Picchu', startYear: 1450, endYear: 1532, civilization: 'İnka İmparatorluğu' }]
+    },
+    {
+        modernName: 'Angkor Wat',
+        lat: 13.4124, lng: 103.8669, type: 'ancient_site', period: 'Khmer',
+        names: [{ name: 'Angkor / Yaśodharapura', startYear: 802, endYear: 1431, civilization: 'Khmer İmparatorluğu' }]
+    },
+    {
+        modernName: 'Mohenjo-Daro',
+        lat: 27.3292, lng: 68.1389, type: 'ancient_site', period: 'İndus Vadisi',
+        names: [{ name: 'Mohenjo-Daro', startYear: -2500, endYear: -1900, civilization: 'İndus Vadisi Uygarlığı' }]
+    },
+    {
+        modernName: 'Terracotta Ordusu (Xi\'an)',
+        lat: 34.3840, lng: 109.2785, type: 'ancient_site', period: 'Çin İmparatorluğu',
+        names: [{ name: 'Chang\'an', startYear: -210, endYear: -206, civilization: 'Qin Hanedanı' }]
+    },
+    {
+        modernName: 'Stonehenge',
+        lat: 51.1788, lng: -1.8262, type: 'ancient_site', period: 'Neolitik',
+        names: [{ name: 'Stonehenge', startYear: -3000, endYear: -2000, civilization: 'Tarih Öncesi Britanya' }]
+    },
+    {
+        modernName: 'Knossos',
+        lat: 35.2978, lng: 25.1632, type: 'ancient_site', period: 'Minos Uygarlığı',
+        names: [{ name: 'Knossos', startYear: -2000, endYear: -1375, civilization: 'Minos Krallığı' }]
+    },
+    {
+        modernName: 'Moai Heykelleri (Paskalya Adası)',
+        lat: -27.1127, lng: -109.3496, type: 'ancient_site', period: 'Polinezya',
+        names: [{ name: 'Rapa Nui', startYear: 1250, endYear: 1500, civilization: 'Rapa Nui Halkı' }]
     },
     // ─── ANADOLU (TÜRKİYE) ───
     {

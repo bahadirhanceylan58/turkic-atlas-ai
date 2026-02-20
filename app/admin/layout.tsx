@@ -19,14 +19,24 @@ export default function AdminLayout({
         const checkAuth = async () => {
             if (!supabase) return;
 
-            const { data: { session } } = await supabase.auth.getSession();
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
 
-            if (!session || session.user.email !== ADMIN_EMAIL) {
+                if (error) throw error;
+
+                if (!session || session?.user?.email !== ADMIN_EMAIL) {
+                    router.replace('/');
+                } else {
+                    setIsAuthorized(true);
+                }
+            } catch (err: any) {
+                if (err.name !== 'AbortError' && err.message !== 'signal is aborted without reason') {
+                    console.error('Admin Auth error:', err);
+                }
                 router.replace('/');
-            } else {
-                setIsAuthorized(true);
+            } finally {
+                setIsLoading(false);
             }
-            setIsLoading(false);
         };
 
         checkAuth();

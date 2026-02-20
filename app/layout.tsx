@@ -26,6 +26,24 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            window.addEventListener('error', function(e) {
+              if (e.message && (e.message.includes('AbortError') || e.message.includes('aborted'))) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+              }
+            }, true);
+            window.addEventListener('unhandledrejection', function(e) {
+              if (e.reason && (e.reason.name === 'AbortError' || (e.reason.message && e.reason.message.includes('aborted')))) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+              }
+            }, true);
+          `
+        }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

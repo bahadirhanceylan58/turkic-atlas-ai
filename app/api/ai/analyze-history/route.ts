@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     }
 
     try {
-        const { stateName, year, location, district, knownHistoricalName } = await req.json();
+        const { stateName, year, location, district, knownHistoricalName, extraMetadata } = await req.json();
 
         const genAI = new GoogleGenerativeAI(API_KEY);
         const model = genAI.getGenerativeModel({
@@ -19,6 +19,10 @@ export async function POST(req: Request) {
                 temperature: 0.5
             }
         });
+
+        const tribeContext = extraMetadata?.type === 'turkic_tribe'
+            ? `\n**TURKIC TRIBE CONTEXT:** Bu yerleşim bir **${extraMetadata.tribe}** boyuna (Kol: ${extraMetadata.branch}) aittir. Analizinde bu boyun o bölgedeki tarihi yerleşimini, varsa iskan politikalarını ve kültürel etkisini ön plana çıkar.`
+            : "";
 
         const locationContext = location ? `Koordinatlar: (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})` : "";
         const districtContext = district ? `İlçe (Kesin Bilgi): ${district}` : "";
@@ -36,7 +40,7 @@ export async function POST(req: Request) {
         const prompt = `
         Sen Kıdemli bir Tarihçi, Sosyolog ve Coğrafyacısın.
         
-        **Görev:** Aşağıdaki konum veya bölge için "${year}" yılına (${eraContext}) odaklanarak kapsamlı bir analiz yap.
+        **Görev:** Aşağıdaki konum veya bölge için "${year}" yılına (${eraContext}) odaklanarak kapsamlı bir analiz yap.${tribeContext}
         
         **Konum:** ${stateName}
         ${locationContext}

@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { generateHistoryAnalysis, getPlaceNameHistory, generateBattleAnalysis, generateDynastyInfo, PlaceNameEntry } from '@/lib/aiService';
 import { HISTORICAL_CITIES } from '@/lib/historicalCityNames';
 import { getStateData } from '@/lib/historicalStateData';
+import { HISTORICAL_EVENTS_DATA } from '@/lib/historicalEventsData';
+import { yearToPercent, percentToYear } from '@/lib/timelineScale';
 
 import { MapPin, Search, Calendar, ChevronLeft, ChevronRight, X, Play, Pause, FastForward, Rewind, Layers, Settings, Globe, Info, Sparkles, BookOpen, Users, ScrollText, Music, Volume2, VolumeX, Maximize2, Minimize2, Share2, Download, AlertCircle, LogIn, LogOut, UserCircle, Bot, Clock, Scroll, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -86,12 +88,16 @@ export default function Home() {
 
   // History Mode State
   const [isHistoryMode, setIsHistoryMode] = useState(false);
-  const [historicalEvents, setHistoricalEvents] = useState<HistoricalEvent[]>([]);
+  const [historicalEvents, setHistoricalEvents] = useState<HistoricalEvent[]>(HISTORICAL_EVENTS_DATA);
   const [selectedEvent, setSelectedEvent] = useState<HistoricalEvent | null>(null);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [turkicOnly, setTurkicOnly] = useState(false);
   const [showAncientSites, setShowAncientSites] = useState(true); // New state for Ancient Sites
   const [showCulturalHeritage, setShowCulturalHeritage] = useState(true);
+  const [showTradeRoutes, setShowTradeRoutes] = useState(true);
+  const [showModernHeatmap, setShowModernHeatmap] = useState(false);
+  const [showTurkicTribes, setShowTurkicTribes] = useState(false);
+  const [selectedTribe, setSelectedTribe] = useState<string | null>(null);
   const [dynastyInfo, setDynastyInfo] = useState<string | null>(null);
   const [isLoadingDynasty, setIsLoadingDynasty] = useState(false);
 
@@ -101,6 +107,27 @@ export default function Home() {
   // Auth State
   const [currentUser, setCurrentUser] = useState<any>(null);
   const { theme, toggleTheme } = useTheme();
+
+  // Ref for typing interval
+  const typingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Clean up typing interval on unmount
+  useEffect(() => {
+    return () => {
+      if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+    };
+  }, []);
+
+  // Suppress Supabase internal AbortErrors from crashing the dev overlay
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (event.reason?.name === 'AbortError' || event.reason?.message?.includes('aborted')) {
+        event.preventDefault(); // Prevent Next.js error overlay
+      }
+    };
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    return () => window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+  }, []);
 
   useEffect(() => {
     fetch('/data/history.json')
@@ -252,23 +279,16 @@ export default function Home() {
 
   // Timeline marks
   const timelineMarks = [
+    { year: -10000, label: 'M.Ö. 10.000' },
+    { year: -3200, label: 'M.Ö. 3200' },
     { year: -209, label: 'M.Ö. 209' },
+    { year: 0, label: '0' },
     { year: 552, label: '552' },
     { year: 1071, label: '1071' },
     { year: 1453, label: '1453' },
     { year: 1923, label: '1923' },
     { year: 2026, label: '2026' },
   ];
-
-  // Ref for typing interval
-  const typingIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
-
-  // Cleanup interval on unmount
-  useEffect(() => {
-    return () => {
-      if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
-    };
-  }, []);
 
   const handleStateClick = async (stateName: string) => {
     setSelectedState(stateName);
@@ -330,13 +350,24 @@ export default function Home() {
       // Typewriter effect for Analysis text
       const analysisToType = analizText;
       let i = 0;
+
+      // Ensure any existing interval is fully cleared
+      if (typingIntervalRef.current) {
+        clearInterval(typingIntervalRef.current);
+        typingIntervalRef.current = null;
+      }
+
       typingIntervalRef.current = setInterval(() => {
-        setAiAnalysis((prev) => analysisToType.substring(0, i));
-        i += 2;
+        setAiAnalysis(analysisToType.substring(0, i)); // Just basic state set
+        i += 3; // slightly faster typing
         if (i > analysisToType.length) {
-          if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+          setAiAnalysis(analysisToType); // Ensure full text is set at the end
+          if (typingIntervalRef.current) {
+            clearInterval(typingIntervalRef.current);
+            typingIntervalRef.current = null;
+          }
         }
-      }, 10);
+      }, 15);
     } catch (error) {
       console.error(error);
       setIsAnalyzing(false);
@@ -392,13 +423,21 @@ export default function Home() {
         // ... existing description handling ...
         const analysis = placeInfo.description;
         let i = 0;
+        if (typingIntervalRef.current) {
+          clearInterval(typingIntervalRef.current);
+          typingIntervalRef.current = null;
+        }
         typingIntervalRef.current = setInterval(() => {
-          setAiAnalysis((prev) => analysis.substring(0, i));
-          i += 2;
+          setAiAnalysis(analysis.substring(0, i));
+          i += 3;
           if (i > analysis.length) {
-            if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+            setAiAnalysis(analysis);
+            if (typingIntervalRef.current) {
+              clearInterval(typingIntervalRef.current);
+              typingIntervalRef.current = null;
+            }
           }
-        }, 10);
+        }, 15);
         setIsAnalyzing(false);
       } else {
         // Trigger AI Analysis
@@ -413,6 +452,12 @@ export default function Home() {
           if (d) district = d;
         }
 
+        const extraMetadata = (place.type === 'turkic_tribe') ? {
+          type: 'turkic_tribe',
+          tribe: place.tribe,
+          branch: place.branch
+        } : null;
+
         // ... historical name logic ...
         let historicalName: string | undefined;
         if (currentPlaceName && place.name === searchQuery) {
@@ -425,7 +470,7 @@ export default function Home() {
           }
         }
 
-        const fullResponse = await generateHistoryAnalysis(place.name, selectedYear, location, district, historicalName);
+        const fullResponse = await generateHistoryAnalysis(place.name, selectedYear, location, district, historicalName, extraMetadata);
         setIsAnalyzing(false);
 
         // ... parsing logic ...
@@ -460,13 +505,21 @@ export default function Home() {
 
         const analysisToType = analizText;
         let i = 0;
+        if (typingIntervalRef.current) {
+          clearInterval(typingIntervalRef.current);
+          typingIntervalRef.current = null;
+        }
         typingIntervalRef.current = setInterval(() => {
-          setAiAnalysis((prev) => analysisToType.substring(0, i));
-          i += 2;
+          setAiAnalysis(analysisToType.substring(0, i));
+          i += 3;
           if (i > analysisToType.length) {
-            if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+            setAiAnalysis(analysisToType);
+            if (typingIntervalRef.current) {
+              clearInterval(typingIntervalRef.current);
+              typingIntervalRef.current = null;
+            }
           }
-        }, 10);
+        }, 15);
       }
     } catch (error: any) {
       console.error("AI Analysis Error:", error);
@@ -561,6 +614,16 @@ export default function Home() {
         isAdmin={isAdmin}
         showAncientSites={showAncientSites}
         showCulturalHeritage={showCulturalHeritage}
+        showTradeRoutes={showTradeRoutes}
+        activeFilters={activeFilters}
+        turkicOnly={turkicOnly}
+        onTurkicToggle={() => setTurkicOnly(!turkicOnly)}
+        showModernHeatmap={showModernHeatmap}
+        onModernHeatmapToggle={() => setShowModernHeatmap(!showModernHeatmap)}
+        showTurkicTribes={showTurkicTribes}
+        onTurkicTribesToggle={() => setShowTurkicTribes(!showTurkicTribes)}
+        selectedTribe={selectedTribe}
+        setSelectedTribe={setSelectedTribe}
       />
       {/* MapOverlay removed per user request */}
 
@@ -709,16 +772,16 @@ export default function Home() {
             initial={{ x: 400 }}
             animate={{ x: 0 }}
             exit={{ x: 400 }}
-            className="fixed top-0 right-0 bottom-0 w-full md:w-[320px] bg-white/70 dark:bg-slate-900/80 backdrop-blur-md border-l border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-5 flex flex-col"
+            className="fixed top-0 right-0 bottom-0 w-full md:w-[320px] bg-slate-900/95 backdrop-blur-xl border-l border-slate-700/50 shadow-[0_0_30px_rgba(0,0,0,0.5)] z-50 p-5 flex flex-col"
           >
             <div className="flex justify-between items-start mb-6">
               <div className="flex items-center gap-2">
-                <Bot className="text-[var(--accent-primary)]" size={24} />
-                <h2 className="text-xl font-bold bg-gradient-to-r from-[var(--accent-primary)] to-blue-500 bg-clip-text text-transparent">
+                <Bot className="text-yellow-400" size={24} />
+                <h2 className="text-xl font-bold text-yellow-400 tracking-wide">
                   Anadolu Coğrafi Hafıza Arşivi
                 </h2>
               </div>
-              <button onClick={() => setAiPanelOpen(false)} className="hover:bg-[var(--surface-bg)] p-1 rounded transition-colors text-[var(--text-secondary)]">
+              <button onClick={() => setAiPanelOpen(false)} className="hover:bg-slate-800 p-1 rounded transition-colors text-slate-400 hover:text-white">
                 <X size={20} />
               </button>
             </div>
@@ -734,37 +797,37 @@ export default function Home() {
                         <img
                           src={stateData.flagUrl}
                           alt={selectedState}
-                          className="w-16 h-10 object-cover rounded shadow-md border border-[var(--border-color)]"
+                          className="w-16 h-10 object-cover rounded shadow-md border border-slate-700/50"
                         />
                       ) : null;
                     })()}
-                    <h3 className="text-2xl font-bold text-[var(--text-primary)]">{selectedState}</h3>
+                    <h3 className="text-2xl font-bold text-white">{selectedState}</h3>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-[var(--accent-primary)] font-mono">{selectedYear} Dönemi</span>
-                    <div className="flex items-center gap-1 text-xs bg-[var(--surface-bg)] px-2 py-1 rounded border border-[var(--border-color)]">
-                      <span className="text-green-500">●</span> <span className="text-[var(--text-secondary)]">Güven: {selectedFeatureData?.confidence_score || 95}%</span>
+                    <span className="text-sm text-yellow-400/90 font-mono font-semibold">{selectedYear} Dönemi</span>
+                    <div className="flex items-center gap-1 text-xs bg-slate-800/80 px-2 py-1 rounded border border-slate-700/50 shadow-inner">
+                      <span className="text-green-400">●</span> <span className="text-slate-300 font-medium">Güven: {selectedFeatureData?.confidence_score || 95}%</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b border-[var(--border-color)] mb-4">
+                <div className="flex border-b border-slate-700/50 mb-4">
                   <button
                     onClick={() => setActiveTab('analysis')}
-                    className={`flex-1 pb-2 text-sm font-medium transition-colors ${activeTab === 'analysis' ? 'text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                    className={`flex-1 pb-2 text-sm font-bold transition-all ${activeTab === 'analysis' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-500 hover:text-slate-300'}`}
                   >
                     Analiz
                   </button>
                   <button
                     onClick={() => setActiveTab('demographics')}
-                    className={`flex-1 pb-2 text-sm font-medium transition-colors ${activeTab === 'demographics' ? 'text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                    className={`flex-1 pb-2 text-sm font-bold transition-all ${activeTab === 'demographics' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-500 hover:text-slate-300'}`}
                   >
                     Demografi
                   </button>
                   <button
                     onClick={() => setActiveTab('sources')}
-                    className={`flex-1 pb-2 text-sm font-medium transition-colors ${activeTab === 'sources' ? 'text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                    className={`flex-1 pb-2 text-sm font-bold transition-all ${activeTab === 'sources' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-500 hover:text-slate-300'}`}
                   >
                     Kaynaklar
                   </button>
@@ -772,19 +835,19 @@ export default function Home() {
 
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                  <div className="bg-[var(--surface-bg)] p-4 rounded-lg border border-[var(--border-color)] min-h-[200px]">
+                  <div className="bg-slate-800/40 p-4 rounded-lg border border-slate-700/50 min-h-[200px] shadow-inner">
                     {activeTab === 'analysis' && (
                       isAnalyzing ? (
-                        <div className="flex flex-col items-center justify-center py-8 gap-3 text-[var(--accent-primary)]">
+                        <div className="flex flex-col items-center justify-center py-8 gap-3 text-yellow-500/80">
                           <div className="flex gap-1">
-                            <div className="w-2 h-2 bg-[var(--accent-primary)] rounded-full animate-bounce" />
-                            <div className="w-2 h-2 bg-[var(--accent-primary)] rounded-full animate-bounce delay-75" />
-                            <div className="w-2 h-2 bg-[var(--accent-primary)] rounded-full animate-bounce delay-150" />
+                            <div className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce" />
+                            <div className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce delay-75" />
+                            <div className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce delay-150" />
                           </div>
-                          <span className="text-xs font-mono animate-pulse">Akademik Kaynaklar Taranıyor (BOA, DLT)...</span>
+                          <span className="text-xs font-mono font-semibold tracking-wider animate-pulse pt-2 text-yellow-400">Akademik Kaynaklar Taranıyor (BOA, DLT)...</span>
                         </div>
                       ) : (
-                        <div className="text-[var(--text-secondary)] text-sm leading-relaxed space-y-4 font-serif">
+                        <div className="text-slate-300 text-sm leading-relaxed space-y-4 font-serif">
                           <div className="whitespace-pre-wrap">{aiAnalysis}</div>
                         </div>
                       )
@@ -795,7 +858,7 @@ export default function Home() {
                         {selectedFeatureData?.demographics ? (
                           <DemographicsCharts data={selectedFeatureData.demographics} />
                         ) : (
-                          <div className="text-[var(--text-muted)] text-sm italic text-center py-4">Bu dönem/bölge için doğrulanmış demografik veri bulunamadı.</div>
+                          <div className="text-slate-500 text-sm italic text-center py-4">Bu dönem/bölge için doğrulanmış demografik veri bulunamadı.</div>
                         )}
                       </div>
                     )}
@@ -804,13 +867,13 @@ export default function Home() {
                       <ul className="space-y-2">
                         {selectedFeatureData?.sources ? (
                           selectedFeatureData.sources.map((source: string, idx: number) => (
-                            <li key={idx} className="flex gap-2 text-sm text-[var(--text-secondary)]">
-                              <span className="text-[var(--accent-primary)]">📚</span>
+                            <li key={idx} className="flex gap-2 text-sm text-slate-300">
+                              <span className="text-yellow-500">📚</span>
                               {source}
                             </li>
                           ))
                         ) : (
-                          <div className="text-[var(--text-muted)] text-sm italic text-center py-4">Kaynak listesi hazırlanıyor.</div>
+                          <div className="text-slate-500 text-sm italic text-center py-4">Kaynak listesi hazırlanıyor.</div>
                         )}
                       </ul>
                     )}
@@ -819,10 +882,10 @@ export default function Home() {
               </div>
             )}
 
-            <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
-              <div className="text-xs text-[var(--text-muted)] text-center flex items-center justify-center gap-1">
+            <div className="mt-4 pt-4 border-t border-slate-700/50">
+              <div className="text-[10px] text-slate-500 text-center flex items-center justify-center gap-1 uppercase tracking-widest font-bold">
                 <span className="opacity-50">Powered by</span>
-                <span className="font-semibold text-[var(--text-secondary)]">Google Gemini Pro</span>
+                <span className="text-yellow-600">Google Gemini Pro</span>
               </div>
             </div>
           </motion.div>
@@ -883,6 +946,8 @@ export default function Home() {
             onAncientSitesToggle={() => setShowAncientSites(!showAncientSites)}
             showCulturalHeritage={showCulturalHeritage}
             onCulturalHeritageToggle={() => setShowCulturalHeritage(!showCulturalHeritage)}
+            showTradeRoutes={showTradeRoutes}
+            onTradeRoutesToggle={() => setShowTradeRoutes(!showTradeRoutes)}
           />
         )}
       </AnimatePresence>
@@ -909,20 +974,17 @@ export default function Home() {
                 {/* Slider Track and Input */}
                 <input
                   type="range"
-                  min="-1000"
-                  max="2026"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  min="0"
+                  max="10000"
+                  value={yearToPercent(selectedYear) * 100}
+                  onChange={(e) => setSelectedYear(percentToYear(parseInt(e.target.value) / 100))}
                   className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-yellow-400 z-20 relative history-timeline-slider"
                 />
 
                 {/* Marks (Tick Marks) */}
                 <div className="absolute inset-x-0 h-full pointer-events-none">
                   {timelineMarks.map((mark) => {
-                    const min = -1000;
-                    const max = 2026;
-                    const range = max - min;
-                    const percent = ((mark.year - min) / range) * 100;
+                    const percent = yearToPercent(mark.year);
                     const near = Math.abs(selectedYear - mark.year) < 100;
 
                     return (
@@ -942,10 +1004,7 @@ export default function Home() {
 
                   {/* Dynamic History Markers (Search Results) */}
                   {placeHistory.map((entry, idx) => {
-                    const min = -1000;
-                    const max = 2026;
-                    const range = max - min;
-                    const percent = Math.max(0, Math.min(100, ((entry.startYear - min) / range) * 100));
+                    const percent = yearToPercent(entry.startYear);
 
                     return (
                       <div

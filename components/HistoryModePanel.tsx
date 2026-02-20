@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Swords, ScrollText, Route, Globe2, ChevronLeft, ChevronRight, Landmark, Filter, BookOpen } from 'lucide-react';
+import { yearToPercent, percentToYear, TIMELINE_MIN, TIMELINE_MAX } from '@/lib/timelineScale';
 
 export interface HistoricalEvent {
     id: number;
@@ -31,10 +32,9 @@ interface HistoryModePanelProps {
     onAncientSitesToggle?: () => void;
     showCulturalHeritage?: boolean;
     onCulturalHeritageToggle?: () => void;
+    showTradeRoutes?: boolean;
+    onTradeRoutesToggle?: () => void;
 }
-
-const TIMELINE_MIN = -1000;
-const TIMELINE_MAX = 2026;
 
 const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
     selectedYear,
@@ -48,7 +48,9 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
     showAncientSites = true,
     onAncientSitesToggle,
     showCulturalHeritage = true,
-    onCulturalHeritageToggle
+    onCulturalHeritageToggle,
+    showTradeRoutes = true,
+    onTradeRoutesToggle
 }) => {
     const [showFilters, setShowFilters] = useState(false);
 
@@ -60,7 +62,6 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
     }, [events, activeFilters]);
 
     const formatYear = (y: number) => y < 0 ? `M.Ö. ${Math.abs(y)}` : `${y}`;
-    const yearToPercent = (year: number) => ((year - TIMELINE_MIN) / (TIMELINE_MAX - TIMELINE_MIN)) * 100;
 
     const jumpBackward = () => {
         const prev = visibleEvents
@@ -87,18 +88,9 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
         >
             {/* Filter Pill (Optional, floats above) */}
             {showFilters && (
-                <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-full px-4 py-2 flex items-center gap-2 shadow-xl mb-2 animate-in fade-in slide-in-from-bottom-2">
+                <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-full px-3 py-2 flex items-center gap-2 shadow-xl mb-2 animate-in fade-in slide-in-from-bottom-2 max-w-full overflow-x-auto custom-scrollbar whitespace-nowrap">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-2">Filtreler:</span>
-                    <button
-                        onClick={onTurkicToggle}
-                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${turkicOnly
-                            ? 'bg-yellow-400/20 border-yellow-400 text-yellow-400'
-                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                            }`}
-                    >
-                        <Globe2 size={12} className="inline mr-1" />
-                        Türk Tarihi
-                    </button>
+
                     {/* Ancient Sites Toggle */}
                     <button
                         onClick={onAncientSitesToggle}
@@ -121,6 +113,17 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
                         <BookOpen size={12} className="inline mr-1" />
                         Ata Mirası
                     </button>
+                    {/* Trade Routes Toggle */}
+                    <button
+                        onClick={onTradeRoutesToggle}
+                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${showTradeRoutes
+                            ? 'bg-blue-600/20 border-blue-600 text-blue-400'
+                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                            }`}
+                    >
+                        <Route size={12} className="inline mr-1" />
+                        Ticaret Yolları
+                    </button>
                     {[{ id: 'battle', label: 'Savaş', icon: Swords }, { id: 'treaty', label: 'Anlaşma', icon: ScrollText }].map(t => (
                         <button
                             key={t.id}
@@ -128,7 +131,7 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
                             className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${activeFilters.length === 0 || activeFilters.includes(t.id)
                                 ? 'bg-slate-700 border-slate-600 text-white'
                                 : 'bg-transparent border-transparent text-slate-500 hover:text-slate-300'
-                                }`}
+                                } shrink-0 flex items-center justify-center`}
                         >
                             <t.icon size={12} className="inline mr-1" />
                             {t.label}
@@ -140,40 +143,40 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
             {/* Main Control Bar */}
             <div className="w-full bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-full px-4 py-3 md:px-6 md:py-3 flex items-center gap-3 md:gap-4 shadow-2xl">
 
-                {/* Left: Year & Navigation */}
-                <div className="flex items-center gap-2 pl-1 md:pl-2 border-r border-slate-700 pr-3 md:pr-4">
+                {/* Left: Year & Navigation (1/4 width on mobile) */}
+                <div className="flex items-center gap-1 md:gap-2 pl-1 md:pl-2 border-r border-slate-700 pr-2 md:pr-4 w-1/4 md:w-auto shrink-0 justify-between md:justify-start">
                     <button
                         onClick={jumpBackward}
-                        className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-800 text-slate-400 hover:text-yellow-400 transition-colors"
+                        className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center hover:bg-slate-800 text-slate-400 hover:text-yellow-400 transition-colors shrink-0"
                         title="Önceki Olay"
                     >
-                        <ChevronLeft size={18} />
+                        <ChevronLeft size={16} className="md:w-[18px] md:h-[18px]" />
                     </button>
 
-                    <div className="flex flex-col items-center min-w-[60px] md:min-w-[70px]">
-                        <span className="text-lg md:text-xl font-bold text-white leading-none tracking-tight">
+                    <div className="flex flex-col items-center min-w-[50px] md:min-w-[70px] shrink-0">
+                        <span className="text-base md:text-xl font-bold text-white leading-none tracking-tight">
                             {formatYear(selectedYear)}
                         </span>
-                        <span className="text-[9px] text-yellow-500/80 font-mono font-bold uppercase tracking-widest mt-0.5">Tarih</span>
+                        <span className="text-[8px] md:text-[9px] text-yellow-500/80 font-mono font-bold uppercase tracking-widest mt-0.5">Tarih</span>
                     </div>
 
                     <button
                         onClick={jumpForward}
-                        className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-800 text-slate-400 hover:text-yellow-400 transition-colors"
+                        className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center hover:bg-slate-800 text-slate-400 hover:text-yellow-400 transition-colors shrink-0"
                         title="Sonraki Olay"
                     >
-                        <ChevronRight size={18} />
+                        <ChevronRight size={16} className="md:w-[18px] md:h-[18px]" />
                     </button>
                 </div>
 
-                {/* Center: Slider */}
-                <div className="flex-1 relative h-8 md:h-10 flex items-center px-1 md:px-2 group">
+                {/* Center: Slider (Expanded on mobile) */}
+                <div className="flex-1 relative h-8 md:h-10 flex items-center px-1 md:px-2 group w-full">
                     <input
                         type="range"
-                        min={TIMELINE_MIN}
-                        max={TIMELINE_MAX}
-                        value={selectedYear}
-                        onChange={(e) => onYearChange(parseInt(e.target.value))}
+                        min="0"
+                        max="10000"
+                        value={yearToPercent(selectedYear) * 100}
+                        onChange={(e) => onYearChange(percentToYear(parseInt(e.target.value) / 100))}
                         className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-yellow-400 z-20 relative history-timeline-slider"
                     />
 
@@ -204,10 +207,10 @@ const HistoryModePanel: React.FC<HistoryModePanelProps> = ({
                 {/* Right: Toggle Filters */}
                 <button
                     onClick={() => setShowFilters(!showFilters)}
-                    className={`p-2 rounded-full transition-colors ${showFilters ? 'bg-yellow-400 text-black' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}
+                    className={`p-1.5 md:p-2 rounded-full transition-colors shrink-0 ${showFilters ? 'bg-yellow-400 text-black' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}
                     title="Filtreleri Göster"
                 >
-                    <Filter size={18} />
+                    <Filter size={16} className="md:w-[18px] md:h-[18px]" />
                 </button>
             </div>
         </motion.div>
