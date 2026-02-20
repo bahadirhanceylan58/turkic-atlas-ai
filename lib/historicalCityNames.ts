@@ -220,7 +220,7 @@ export const HISTORICAL_CITIES: HistoricalCity[] = [
     },
     // ─── DÜNYA GENELİ ANTİK ÖREN YERLERİ (GLOBAL ANCIENT SITES) ───
     {
-        आधुनिकAdı: 'Roma Forumu / Kolezyum', modernName: 'Roma',
+        modernName: 'Roma Forumu / Kolezyum',
         lat: 41.8902, lng: 12.4922, type: 'ancient_site', period: 'Antik Roma',
         names: [{ name: 'Roma', startYear: -753, endYear: 476, civilization: 'Roma İmparatorluğu' }]
     },
