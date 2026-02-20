@@ -664,7 +664,8 @@ export const HISTORICAL_CITIES: HistoricalCity[] = [
         lat: 39.7681,
         lng: 64.4556,
         names: [
-            { name: 'Buhara', startYear: -500, endYear: 2100, civilization: 'Sogd / Samani (Başkent) / Timur / Özbekistan' },
+            { name: 'Puh-ho', startYear: -500, endYear: 700, civilization: 'Sogd / Göktürk' },
+            { name: 'Buhara', startYear: 700, endYear: 2100, civilization: 'İslam / Samani (Başkent) / Timur / Özbekistan' },
         ],
     },
     {
@@ -716,36 +717,253 @@ export const HISTORICAL_CITIES: HistoricalCity[] = [
             { name: 'Beograd', startYear: 1867, endYear: 2100, civilization: 'Sırbistan' },
         ],
     },
+    // --- SILK ROAD & DYNAMIC NAMES ---
     {
-        modernName: 'Kaşgar',
-        lat: 39.4704,
-        lng: 75.9899,
+        modernName: 'Taşkent',
+        lat: 41.2995,
+        lng: 69.2401,
         names: [
-            { name: 'Kaşgar', startYear: -200, endYear: 2100, civilization: 'Uygur / Karahanlı (Başkent) / Moğol / Çin' },
+            { name: 'Çaç', startYear: -300, endYear: 750, civilization: 'Sogd / Göktürk' },
+            { name: 'Binket / Şaş', startYear: 750, endYear: 1220, civilization: 'İslam / Samani / Karahanlı' },
+            { name: 'Taşkent', startYear: 1220, endYear: 2100, civilization: 'Moğol / Timur / Özbekistan' },
         ],
     },
     {
-        modernName: 'Balasagun',
-        lat: 42.7400,
-        lng: 75.2200,
+        modernName: 'Merv',
+        lat: 37.6626,
+        lng: 62.1852,
         names: [
-            { name: 'Balasagun', startYear: 850, endYear: 1218, civilization: 'Karahanlı (Başkent) / Karahitay' },
+            { name: 'Margiana', startYear: -500, endYear: 651, civilization: 'Pers / Part / Sasani' },
+            { name: 'Merv', startYear: 651, endYear: 1221, civilization: 'Abbasi / Büyük Selçuklu (Başkent)' },
+            { name: 'Merv (Harabe)', startYear: 1221, endYear: 2100, civilization: 'Moğol İstilası Sonrası' },
         ],
     },
+    {
+        modernName: 'Nişabur',
+        lat: 36.2133,
+        lng: 58.7958,
+        names: [
+            { name: 'Nevşapur', startYear: 250, endYear: 651, civilization: 'Sasani' },
+            { name: 'Nişabur', startYear: 651, endYear: 1221, civilization: 'İslam / Selçuklu (Başkent)' },
+            { name: 'Nişabur (Harabe)', startYear: 1221, endYear: 1300, civilization: 'Moğol İstilası Sonrası' },
+            { name: 'Nişabur', startYear: 1300, endYear: 2100, civilization: 'Safevi / İran' },
+        ],
+    },
+    {
+        modernName: 'Herat',
+        lat: 34.3419,
+        lng: 62.2031,
+        names: [
+            { name: 'Aria', startYear: -500, endYear: 300, civilization: 'Pers / İskender / Kuşan' },
+            { name: 'Herat', startYear: 300, endYear: 1370, civilization: 'Sasani / Gazneli / Gurlu' },
+            { name: 'Herat', startYear: 1370, endYear: 1507, civilization: 'Timurlu (Başkent)' },
+            { name: 'Herat', startYear: 1507, endYear: 2100, civilization: 'Safevi / Afganistan' },
+        ],
+    },
+    {
+        modernName: 'Kabil',
+        lat: 34.5281,
+        lng: 69.1723,
+        names: [
+            { name: 'Kabura', startYear: -100, endYear: 642, civilization: 'Kuşan / Ak Hun' },
+            { name: 'Kabil', startYear: 642, endYear: 1504, civilization: 'Gazneli / Timur' },
+            { name: 'Kabil', startYear: 1504, endYear: 1526, civilization: 'Babür (İlk Başkent)' },
+            { name: 'Kabil', startYear: 1526, endYear: 2100, civilization: 'Afganistan (Başkent)' },
+        ],
+    },
+    {
+        modernName: 'Gazne',
+        lat: 33.5539,
+        lng: 68.4208,
+        names: [
+            { name: 'Gazne', startYear: 600, endYear: 977, civilization: 'İslam / Samani' },
+            { name: 'Gazne', startYear: 977, endYear: 1186, civilization: 'Gazneli (Başkent)' },
+            { name: 'Ghazni', startYear: 1186, endYear: 2100, civilization: 'Gurlu / Afganistan' },
+        ],
+    },
+    {
+        modernName: 'Tebriz',
+        lat: 38.0800,
+        lng: 46.2919,
+        names: [
+            { name: 'Tauris', startYear: -300, endYear: 642, civilization: 'Sasani' },
+            { name: 'Tebriz', startYear: 642, endYear: 1265, civilization: 'İslam' },
+            { name: 'Tebriz', startYear: 1265, endYear: 1335, civilization: 'İlhanlı (Başkent)' },
+            { name: 'Tebriz', startYear: 1335, endYear: 1555, civilization: 'Akkoyunlu / Safevi (Başkent)' },
+            { name: 'Tebriz', startYear: 1555, endYear: 2100, civilization: 'Asya' },
+        ],
+    },
+    {
+        modernName: 'Bakü',
+        lat: 40.4093,
+        lng: 49.8671,
+        names: [
+            { name: 'Shirvan', startYear: 700, endYear: 1191, civilization: 'Şirvanşahlar' },
+            { name: 'Bakü (Baku)', startYear: 1191, endYear: 2100, civilization: 'Şirvanşahlar (Başkent) / Safevi / Azerbaycan' },
+        ],
+    },
+    {
+        modernName: 'Şamahı',
+        lat: 40.6300,
+        lng: 48.6400,
+        names: [
+            { name: 'Şamahı', startYear: 800, endYear: 1191, civilization: 'Şirvanşahlar (Başkent)' },
+            { name: 'Şamahı', startYear: 1191, endYear: 1538, civilization: 'Şirvanşahlar' },
+            { name: 'Semaha', startYear: 1538, endYear: 2100, civilization: 'Safevi / Osmanlı / Rus' },
+        ],
+    },
+    // --- LEGENDARY / LOST CITIES (KAYIP ŞEHİRLER) ---
     {
         modernName: 'Ötüken',
         lat: 47.4500,
         lng: 102.0000,
+        type: 'ancient_site',
         names: [
-            { name: 'Ötüken', startYear: 552, endYear: 840, civilization: 'Göktürk / Uygur (Kutsal Başkent)' },
+            { name: 'Ötüken', startYear: -209, endYear: 552, civilization: 'Hiung-nu / Rouran' },
+            { name: 'Ötüken', startYear: 552, endYear: 744, civilization: 'Göktürk (Kutsal Başkent)' },
+            { name: 'Ötüken', startYear: 744, endYear: 840, civilization: 'Uygur' },
         ],
     },
     {
         modernName: 'Karakurum',
         lat: 47.1972,
         lng: 102.7833,
+        type: 'ancient_site',
         names: [
             { name: 'Karakorum', startYear: 1220, endYear: 1368, civilization: 'Moğol İmparatorluğu (Başkent)' },
         ],
     },
+    {
+        modernName: 'Ordu-Balık',
+        lat: 47.4261,
+        lng: 102.6688,
+        type: 'ancient_site',
+        names: [
+            { name: 'Karabalgasun (Ordu-Balık)', startYear: 744, endYear: 840, civilization: 'Uygur Kağanlığı (Başkent)' },
+        ],
+    },
+    {
+        modernName: 'Saray Batu',
+        lat: 47.1816,
+        lng: 47.4475,
+        type: 'ancient_site',
+        names: [
+            { name: 'Saray Batu', startYear: 1240, endYear: 1332, civilization: 'Altın Orda (Eski Başkent)' },
+            { name: 'Saray', startYear: 1332, endYear: 1556, civilization: 'Altın Orda' },
+        ],
+    },
+    {
+        modernName: 'Saray Berke (Yeni Saray)',
+        lat: 48.6500,
+        lng: 45.3500, // Approximated Tzarev
+        type: 'ancient_site',
+        names: [
+            { name: 'Saray Berke (Yeni Saray)', startYear: 1332, endYear: 1556, civilization: 'Altın Orda (Yeni Başkent)' },
+        ],
+    },
+    {
+        modernName: 'İdil (Atil)',
+        lat: 46.3333,
+        lng: 48.0000, // Volga delta
+        type: 'ancient_site',
+        names: [
+            { name: 'İdil (Atil)', startYear: 730, endYear: 969, civilization: 'Hazar İmparatorluğu (Başkent)' },
+        ],
+    },
+    {
+        modernName: 'Belencer',
+        lat: 43.0800,
+        lng: 47.1300, // Sulak river Dagestan
+        type: 'ancient_site',
+        names: [
+            { name: 'Belencer', startYear: 630, endYear: 730, civilization: 'Hazar İmparatorluğu (İlk Başkent)' },
+        ],
+    },
+    {
+        modernName: 'Yenikent',
+        lat: 45.6166,
+        lng: 61.9166, // Lower Syr Darya
+        type: 'ancient_site',
+        names: [
+            { name: 'Yenikent', startYear: 750, endYear: 1050, civilization: 'Oğuz Yabguluğu (Başkent)' },
+            { name: 'Yenikent', startYear: 1050, endYear: 1220, civilization: 'Selçuklu / Harzemşah' },
+        ],
+    },
+    {
+        modernName: 'Cend',
+        lat: 44.9500,
+        lng: 63.8833, // Syr Darya
+        type: 'ancient_site',
+        names: [
+            { name: 'Cend', startYear: 950, endYear: 1220, civilization: 'Oğuz / Selçuklu (Ertuğrul Gazi ata yurdu)' },
+        ],
+    },
+    {
+        modernName: 'Suyab',
+        lat: 42.8028,
+        lng: 75.3197, // Ak-Beshim, Kyrgyzstan
+        type: 'ancient_site',
+        names: [
+            { name: 'Suyab', startYear: 581, endYear: 740, civilization: 'Batı Göktürk / Türgiş (Başkent)' },
+        ],
+    },
+    {
+        modernName: 'Balasagun',
+        lat: 42.7480,
+        lng: 75.2440, // Burana, Kyrgyzstan
+        type: 'ancient_site',
+        names: [
+            { name: 'Balasagun', startYear: 840, endYear: 1124, civilization: 'Karahanlı (Başkent)' },
+            { name: 'Kuz-Ordu (Balasagun)', startYear: 1124, endYear: 1218, civilization: 'Karahitay (Başkent)' },
+        ],
+    },
+    {
+        modernName: 'Talas (Taraz)',
+        lat: 42.9000,
+        lng: 71.3667, // Taraz, Kazakhstan
+        names: [
+            { name: 'Talas', startYear: 568, endYear: 999, civilization: 'Göktürk / Karluk (751 Talas Savaşı)' },
+            { name: 'Taraz', startYear: 999, endYear: 1220, civilization: 'Karahanlı' },
+            { name: 'Taraz / Jambyl', startYear: 1220, endYear: 2100, civilization: 'Kazakistan' },
+        ],
+    },
+    {
+        modernName: 'Otrar (Farab)',
+        lat: 42.8466,
+        lng: 68.3038, // Farab, Kazakhstan
+        type: 'ancient_site',
+        names: [
+            { name: 'Otrar (Farab)', startYear: 800, endYear: 1219, civilization: 'Karahanlı / Harzemşah (Otrar Faciası)' },
+            { name: 'Otrar (Ören Yeri)', startYear: 1220, endYear: 1600, civilization: 'Timur (Ölüm Yeri)' },
+        ],
+    },
+    {
+        modernName: 'Sıgnak',
+        lat: 44.1500,
+        lng: 66.8333, // Syr Darya, Kazakhstan
+        type: 'ancient_site',
+        names: [
+            { name: 'Sıgnak', startYear: 1000, endYear: 1465, civilization: 'Kıpçak / Ak Orda' },
+            { name: 'Sıgnak', startYear: 1465, endYear: 1599, civilization: 'Kazak Hanlığı (İlk Başkent)' },
+        ],
+    },
+    {
+        modernName: 'Yesi (Türkistan)',
+        lat: 43.3000,
+        lng: 68.2667,
+        names: [
+            { name: 'Yasy (Yesi)', startYear: 1100, endYear: 1395, civilization: 'Selçuklu / Harzemşah (Ahmet Yesevi Türbesi)' },
+            { name: 'Türkistan / Yesi', startYear: 1395, endYear: 2100, civilization: 'Timurlu / Kazak Hanlığı / Özbekistan' },
+        ],
+    },
+    {
+        modernName: 'Kaşgar',
+        lat: 39.4704,
+        lng: 75.9899,
+        names: [
+            { name: 'Kaşgar', startYear: -200, endYear: 840, civilization: 'Hun / Göktürk / Tang' },
+            { name: 'Kaşgar (Ordu-Kent)', startYear: 840, endYear: 1211, civilization: 'Karahanlı (Divanü Lügati\'t-Türk)' },
+            { name: 'Kaşgar', startYear: 1211, endYear: 2100, civilization: 'Çağatay / Doğu Türkistan' },
+        ],
+    }
 ];

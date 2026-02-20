@@ -11,8 +11,10 @@ import { getCitiesForYear, HISTORICAL_CITIES } from '@/lib/historicalCityNames';
 import { CULTURAL_HERITAGE_DATA } from '@/lib/culturalHeritageData';
 import { isTurkicState } from '@/lib/turkicStates';
 import { getTranslatedName } from '@/lib/stateTranslations';
+import { getFlagIdForState, STATE_FLAGS } from '@/lib/stateFlags';
 import { getModernTurkicGeoJSON } from '@/lib/modernTurkicPopulations';
-import { getTurkicTribesGeoJSON } from '@/lib/turkicTribesData';
+import { getTurkicTribesGeoJSON, getUniqueTribes } from '@/lib/turkicTribesData';
+import { HISTORICAL_FIGURES_DATA } from '@/lib/historicalFiguresData';
 import { useTheme } from '@/components/ThemeProvider';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -37,8 +39,10 @@ interface MapBlockProps {
   onModernHeatmapToggle?: () => void;
   showTurkicTribes?: boolean;
   onTurkicTribesToggle?: () => void;
+  showHistoricalFigures?: boolean;
+  onHistoricalFiguresToggle?: () => void;
   selectedTribe?: string | null;
-  setSelectedTribe?: (tribe: string | null) => void;
+  setSelectedTribe?: (tribeId: string | null) => void;
 }
 
 const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onPlaceClick, focusedLocation, historyMode = false, historicalEvents = [], onHistoricalEventClick, isAdmin = false, showAncientSites = true, showCulturalHeritage = true, showTradeRoutes = true, activeFilters = [], turkicOnly = false,
@@ -47,6 +51,8 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   onModernHeatmapToggle,
   showTurkicTribes = false,
   onTurkicTribesToggle,
+  showHistoricalFigures = false,
+  onHistoricalFiguresToggle,
   selectedTribe = null,
   setSelectedTribe
 }) => {
@@ -117,7 +123,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
     const all = getCitiesForYear(selectedYear);
     return {
       visibleCities: all.filter(c => c.type !== 'ancient_site'),
-      ancientSites: all.filter(c => c.type === 'ancient_site')
+      ancientSites: selectedYear > 500 ? [] : all.filter(c => c.type === 'ancient_site')
     };
   }, [historyMode, selectedYear]);
 
@@ -158,15 +164,21 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           const rawName = f.properties.NAME || f.properties.name || f.properties.Name || "Unknown";
           const translatedName = getTranslatedName(rawName);
 
+          const fId = getFlagIdForState(rawName);
+          const props: any = {
+            ...f.properties,
+            // Generate a consistent color from original name
+            generated_color: stringToColor(rawName),
+            name: translatedName, // Use translated/formatted name for map labels
+            is_turkic: isTurkicState(rawName)
+          };
+          if (fId) {
+            props.flag_id = fId;
+          }
+
           return {
             ...f,
-            properties: {
-              ...f.properties,
-              // Generate a consistent color from original name
-              generated_color: stringToColor(rawName),
-              name: translatedName, // Use translated/formatted name for map labels
-              is_turkic: isTurkicState(rawName)
-            }
+            properties: props
           };
         });
 
@@ -249,6 +261,46 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
   // Default to 'satellite' (Fiziki)
   const [mapStyle, setMapStyle] = React.useState<'dark' | 'political' | 'satellite'>('satellite');
   const [isStyleMenuOpen, setIsStyleMenuOpen] = React.useState(false);
+  const [flagsLoaded, setFlagsLoaded] = React.useState(false);
+
+  // Load Flags into Mapbox
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    const loadFlags = () => {
+      // Avoid reloading if already done for this style
+      if (flagsLoaded) return;
+
+      const uniqueFlags = Array.from(new Set(Object.values(STATE_FLAGS)));
+
+      uniqueFlags.forEach(flagId => {
+        if (!map.hasImage(flagId)) {
+          const img = new Image(60, 40);
+          img.onload = () => {
+            if (!map.hasImage(flagId)) {
+              map.addImage(flagId, img);
+            }
+          };
+          img.src = `/flags/${flagId}.svg`;
+        }
+      });
+      setFlagsLoaded(true);
+    };
+
+    if (map.isStyleLoaded()) {
+      loadFlags();
+    } else {
+      map.once('style.load', loadFlags);
+    }
+
+    // Must reload flags if map style changes completely, but addImage usually persists across style updates in newer mapbox versions.
+    map.on('style.load', loadFlags);
+
+    return () => {
+      map.off('style.load', loadFlags);
+    };
+  }, [mapStyle]);
 
   // Sync map style with theme (but respect user preference if they switch)
   useEffect(() => {
@@ -309,15 +361,21 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         isActive = false;
       }
 
+      const props: any = {
+        ...feature.properties,
+        current_label: label,
+        is_active: isActive ? 1 : 0
+      };
+      const fId = getFlagIdForState(feature.properties.NAME || feature.properties.name);
+      if (fId) {
+        props.flag_id = fId;
+      }
+
       return {
         ...feature,
         // Promote ID for stable diffing
         id: feature.properties.name || Math.random(),
-        properties: {
-          ...feature.properties,
-          current_label: label,
-          is_active: isActive ? 1 : 0
-        }
+        properties: props
       };
     });
 
@@ -409,7 +467,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
     layout: {
       'text-field': ['get', 'current_label'],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-      'text-size': 12,
+      'text-size': 14,
       'text-offset': [0, 1.25],
       'text-anchor': 'top'
     },
@@ -543,28 +601,37 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
 
     style.layers.forEach((layer: any) => {
       try {
-        // Modern Layers to Hide in History Mode
-        const isModernLayer =
+        // Custom layers managed by React - DO NOT TOUCH
+        const isCustomLayer =
+          layer.id.includes('historical') ||
+          layer.id.includes('places') ||
+          layer.id.includes('cultural-heritage') ||
+          layer.id.includes('modern-turkic') ||
+          layer.id.includes('turkic-tribes') ||
+          layer.id.includes('ancient-sites') ||
+          layer.id.includes('fig-') ||
+          layer.id.includes('-glow');
+
+        // Aggressively hide all default symbols (labels/places) + roads/buildings
+        const isModernLayer = !isCustomLayer && (
+          layer.type === 'symbol' || // ALL labels
           layer.id.includes('road') ||
           layer.id.includes('admin') ||
           layer.id.includes('waterway') ||
           layer.id.includes('building') ||
-          layer.id.includes('country-label') ||
-          layer.id.includes('state-label') ||
-          layer.id.includes('settlement-label') ||
-          layer.id.includes('poi-label') ||
+          layer.id.includes('transit') ||
           layer.id.includes('airport') ||
-          layer.id.includes('transit');
+          layer.id.includes('place') ||
+          layer.id.includes('settlement')
+        );
 
         if (isModernLayer) {
           map.setLayoutProperty(layer.id, 'visibility', historyMode ? 'none' : 'visible');
         }
 
         // Mute water color - ONLY for fill layers
-        if (layer.id.includes('water') && layer.type === 'fill' && historyMode) {
-          map.setPaintProperty(layer.id, 'fill-color', '#a0a0a0');
-        } else if (layer.id.includes('water') && layer.type === 'fill' && !historyMode) {
-          map.setPaintProperty(layer.id, 'fill-color', '#a0cfdf');
+        if (layer.id.includes('water') && layer.type === 'fill') {
+          map.setPaintProperty(layer.id, 'fill-color', historyMode ? '#a0a0a0' : '#a0cfdf');
         }
       } catch (err) {
         // Skip layers that can't be modified (e.g., background)
@@ -693,6 +760,34 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         onPlaceClick({
           ...props,
           type: 'turkic_tribe', // Specific type for AI context
+          isCustom: true,
+          lat: coords[1],
+          lng: coords[0]
+        });
+      }
+      return;
+    }
+
+    // Check for Historical Figures Labels/Points
+    const figureFeature = clickedFeatures.find((f: any) =>
+      f.layer.id === 'historical-figures-labels' || f.layer.id === 'historical-figures-points'
+    );
+    if (figureFeature) {
+      const props = figureFeature.properties;
+      const coords = figureFeature.geometry.coordinates;
+      const isMobile = window.innerWidth < 768;
+
+      mapRef.current?.flyTo({
+        center: [coords[0], coords[1]],
+        zoom: 9,
+        duration: 1000,
+        padding: isMobile ? { bottom: 300, top: 0, left: 0, right: 0 } : { bottom: 0, top: 0, left: 0, right: 0 }
+      });
+
+      if (onPlaceClick) {
+        onPlaceClick({
+          ...props,
+          type: 'historical_figure', // Specific type for AI context
           isCustom: true,
           lat: coords[1],
           lng: coords[0]
@@ -845,6 +940,8 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           'ancient-sites-labels',
           'cultural-heritage-labels',
           'cultural-heritage-glow',
+          'historical-figures-points',
+          'historical-figures-labels',
           'historical-events-glow',
           'historical-events-labels',
           // Mapbox Default Layers
@@ -907,6 +1004,19 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           map.on('mouseleave', 'turkic-tribes-points', () => {
             map.getCanvas().style.cursor = '';
           });
+          // Pointer cursor for Historical Figures points/labels
+          map.on('mouseenter', 'historical-figures-labels', () => {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+          map.on('mouseenter', 'historical-figures-points', () => {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+          map.on('mouseleave', 'historical-figures-labels', () => {
+            map.getCanvas().style.cursor = '';
+          });
+          map.on('mouseleave', 'historical-figures-points', () => {
+            map.getCanvas().style.cursor = '';
+          });
         }}
       >
         {/* Historical State Polygons — FULL WORLD HISTORY MODE */}
@@ -951,7 +1061,12 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
                 'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
                 'text-size': 10,
                 'text-transform': 'uppercase',
-                'text-max-width': 12
+                'text-max-width': 12,
+                'icon-image': ['get', 'flag_id'],
+                'icon-size': 0.6,
+                'icon-anchor': 'bottom',
+                'icon-offset': [0, -10],
+                'icon-allow-overlap': true
               }}
               paint={{
                 'text-color': '#333', // Ink color
@@ -1143,12 +1258,13 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
             {visibleCities.length > 0 && (
               <Source
                 id="historical-city-names"
+                key={`h-cities-${selectedYear}`} // Force re-render on year change
                 type="geojson"
                 data={{
                   type: 'FeatureCollection',
                   features: visibleCities.map((city, idx) => ({
                     type: 'Feature' as const,
-                    id: `city-${idx}`,
+                    id: `h-city-${idx}`,
                     geometry: {
                       type: 'Point' as const,
                       coordinates: [city.lng, city.lat],
@@ -1172,27 +1288,25 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
                     'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
                     'text-size': [
                       'interpolate', ['linear'], ['zoom'],
-                      2, 9,
-                      5, 12,
-                      8, 15,
+                      2, 14,
+                      5, 18,
+                      8, 22,
                     ],
                     'text-anchor': 'top',
                     'text-offset': [0, 0.5],
-                    'text-allow-overlap': false,
-                    'text-ignore-placement': false,
-                    'text-max-width': 10,
-                    'text-line-height': 1.2,
+                    'text-allow-overlap': true,
+                    'text-ignore-placement': true,
+                    'text-max-width': 12,
+                    'text-line-height': 1.1,
                     'icon-image': 'circle-11',
-                    'icon-size': 0.7,
-                    'icon-anchor': 'center',
+                    'icon-size': 0.8,
                     'icon-allow-overlap': true,
                   }}
                   paint={{
-                    'text-color': '#4a2c0a',
-                    'text-halo-color': '#f5e6c8',
-                    'text-halo-width': 1.5,
-                    'text-halo-blur': 0.5,
-                    'text-opacity': 0.95,
+                    'text-color': '#e11d48', // Vibrant Rose/Red color to stand out
+                    'text-halo-color': '#ffffff',
+                    'text-halo-width': 2.5,
+                    'text-halo-blur': 0,
                   }}
                   minzoom={2}
                 />
@@ -1326,6 +1440,70 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
               paint={{
                 'text-color': '#d8b4fe', // light purple
                 'text-halo-color': '#3b0764', // dark purple
+                'text-halo-width': 2,
+              }}
+              minzoom={2}
+            />
+          </Source>
+        )}
+
+        {/* Historical Figures */}
+        {historyMode && showHistoricalFigures && HISTORICAL_FIGURES_DATA && (
+          <Source
+            id="historical-figures-data"
+            type="geojson"
+            data={{
+              type: 'FeatureCollection',
+              features: HISTORICAL_FIGURES_DATA
+                .filter(figure => {
+                  if (figure.birthYear !== null && figure.deathYear !== null) {
+                    return selectedYear >= figure.birthYear && selectedYear <= figure.deathYear;
+                  }
+                  // Fallback if no exact death year, maybe activeStart to activeEnd + buffer
+                  return selectedYear >= figure.activeStartYear && selectedYear <= figure.activeEndYear;
+                })
+                .map((figure, idx) => ({
+                  type: 'Feature' as const,
+                  id: `figure-${idx}`,
+                  geometry: {
+                    type: 'Point' as const,
+                    coordinates: [figure.lng, figure.lat],
+                  },
+                  properties: {
+                    ...figure,
+                    label: `${figure.name}\n(${figure.birthYear ? figure.birthYear : '?'} - ${figure.deathYear ? figure.deathYear : '?'})`,
+                  },
+                })),
+            }}
+          >
+            <Layer
+              id="historical-figures-points"
+              type="circle"
+              paint={{
+                'circle-radius': 14,
+                'circle-color': '#0ea5e9', // Sky blue
+                'circle-blur': 0.8,
+                'circle-opacity': 0.8
+              }}
+              minzoom={2}
+            />
+            <Layer
+              id="historical-figures-labels"
+              type="symbol"
+              layout={{
+                'text-field': ['get', 'label'],
+                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                'text-size': 11,
+                'text-anchor': 'top',
+                'text-offset': [0, 1.2],
+                'icon-image': 'user-11', // Mapbox default user icon
+                'icon-size': 1.5,
+                'icon-allow-overlap': true,
+                'text-allow-overlap': false
+              }}
+              paint={{
+                'text-color': '#e0f2fe',
+                'text-halo-color': '#0369a1',
                 'text-halo-width': 2,
               }}
               minzoom={2}
@@ -1498,8 +1676,11 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
               type: 'FeatureCollection',
               features: historicalEvents
                 .filter(ev => {
-                  // Only show if close to selectedYear (e.g. +/- 50 years)
-                  if (Math.abs(ev.year - selectedYear) > 200) return false;
+                  // Only show if the event has happened (selectedYear >= ev.year)
+                  // and is within 200 years past the event.
+                  if (selectedYear < ev.year) return false;
+                  if (selectedYear - ev.year > 200) return false;
+
                   // Filter by activeFilters if array is empty (meaning all active) or includes type
                   if (activeFilters && activeFilters.length > 0 && ev.type && !activeFilters.includes(ev.type)) return false;
                   return true;
@@ -1570,8 +1751,8 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         }
       </Map>
 
-      {/* Map Controls (Responsive — adjust position in history mode) */}
-      <div className={`absolute flex flex-col gap-2 z-50 right-4 ${historyMode ? 'top-20 md:top-24' : 'top-1/2 -translate-y-1/2 md:top-auto md:right-auto md:bottom-24 md:left-6 md:translate-y-0'}`}>
+      {/* Map Controls (Responsive — always on right now) */}
+      <div className="absolute flex flex-col gap-2 z-50 right-4 top-20 md:top-24">
 
         {/* Zoom Controls */}
         <div className="flex flex-col bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-lg overflow-hidden shadow-lg">
@@ -1601,10 +1782,10 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           <AnimatePresence>
             {isStyleMenuOpen && (
               <motion.div
-                initial={{ opacity: 0, x: -10, scale: 0.95 }}
+                initial={{ opacity: 0, x: 10, scale: 0.95 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: -10, scale: 0.95 }}
-                className="absolute left-14 bottom-0 bg-slate-900/95 backdrop-blur-xl border border-slate-700 p-2 rounded-xl shadow-2xl w-48 flex flex-col gap-1"
+                exit={{ opacity: 0, x: 10, scale: 0.95 }}
+                className="absolute bottom-0 bg-slate-900/95 backdrop-blur-xl border border-slate-700 p-2 rounded-xl shadow-2xl w-48 flex flex-col gap-1 right-14"
               >
                 <div className="text-[10px] uppercase text-slate-500 font-bold px-2 py-1 tracking-wider">Harita Katmanı</div>
 
@@ -1662,7 +1843,7 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
             </svg>
 
             {/* Tooltip */}
-            <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white opacity-0 whitespace-nowrap pointer-events-none group-hover:opacity-100 transition-opacity">
+            <span className="absolute top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white opacity-0 whitespace-nowrap pointer-events-none group-hover:opacity-100 transition-opacity right-full mr-3">
               Türk Dünyası Filtresi
             </span>
           </button>
@@ -1696,41 +1877,105 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
           </svg>
 
           {/* Tooltip */}
-          <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white opacity-0 whitespace-nowrap pointer-events-none group-hover:opacity-100 transition-opacity">
+          <span className="absolute top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white opacity-0 whitespace-nowrap pointer-events-none group-hover:opacity-100 transition-opacity right-full mr-3">
             Günümüz Türk Nüfusu
           </span>
         </button>
 
         {/* Turkic Tribes (Boylar) Toggle (Standalone) */}
-        <button
-          onClick={onTurkicTribesToggle}
-          className={`p-2.5 rounded-lg backdrop-blur-md border transition-all shadow-lg flex items-center justify-center relative group ${showTurkicTribes
-            ? 'bg-orange-500/20 text-orange-500 border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.3)]'
-            : 'bg-slate-900/80 text-slate-300 border-slate-700/50 hover:text-white hover:border-orange-500/50 hover:bg-slate-800'
-            }`}
-          title="Türk Boyları Yerleşimleri"
-        >
-          {/* Bow and Arrow / Tribe SVG */}
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="w-5 h-5"
+        <div className="relative group/tribe">
+          <button
+            onClick={onTurkicTribesToggle}
+            className={`p-2.5 rounded-lg backdrop-blur-md border transition-all shadow-lg flex items-center justify-center relative group ${showTurkicTribes
+              ? 'bg-orange-500/20 text-orange-500 border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.3)]'
+              : 'bg-slate-900/80 text-slate-300 border-slate-700/50 hover:text-white hover:border-orange-500/50 hover:bg-slate-800'
+              }`}
+            title="Türk Boyları Yerleşimleri"
           >
-            <path d="M12 2v20" />
-            <path d="M22 12l-6-6M22 12l-6 6M22 12H10" />
-            <path d="M12 2a10 10 0 0 0-10 10 10 10 0 0 0 10 10" />
-          </svg>
+            {/* Bow and Arrow / Tribe SVG */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-5 h-5"
+            >
+              <path d="M12 2v20" />
+              <path d="M22 12l-6-6M22 12l-6 6M22 12H10" />
+              <path d="M12 2a10 10 0 0 0-10 10 10 10 0 0 0 10 10" />
+            </svg>
 
-          {/* Tooltip */}
-          <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white opacity-0 whitespace-nowrap pointer-events-none group-hover:opacity-100 transition-opacity">
-            Türk Boyları (Oğuz v.b)
-          </span>
-        </button>
+            {/* Tooltip */}
+            <span className="absolute top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white opacity-0 whitespace-nowrap pointer-events-none group-hover:opacity-100 transition-opacity right-full mr-3">
+              Türk Boyları (Oğuz v.b)
+            </span>
+          </button>
+
+          {/* Expanded Tribe List (Visible only when active & hovered) */}
+          {showTurkicTribes && (
+            <div className="absolute top-0 right-full mr-2 hidden group-hover/tribe:flex flex-col gap-1 bg-slate-900/95 backdrop-blur-md border border-slate-700 p-2 rounded-lg shadow-xl w-40 max-h-64 overflow-y-auto z-50 styled-scrollbar">
+              <div className="text-[10px] text-slate-400 mb-1 border-b border-slate-700 pb-1 uppercase font-bold">Filtrele</div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedTribe?.(null);
+                }}
+                className={`text-left text-xs px-2 py-1.5 rounded transition-colors ${!selectedTribe ? 'bg-orange-500/20 text-orange-400' : 'text-slate-300 hover:bg-slate-800'}`}
+              >
+                Tümü
+              </button>
+              {getUniqueTribes().map(tribeName => (
+                <button
+                  key={tribeName}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedTribe?.(tribeName);
+                  }}
+                  className={`text-left text-xs px-2 py-1.5 rounded transition-colors ${selectedTribe === tribeName ? 'bg-orange-500/20 text-orange-400' : 'text-slate-300 hover:bg-slate-800'}`}
+                >
+                  {tribeName} Boyu
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Historical Figures Toggle (Standalone) */}
+        {historyMode && (
+          <button
+            onClick={onHistoricalFiguresToggle}
+            className={`p-2.5 rounded-lg backdrop-blur-md border transition-all shadow-lg flex items-center justify-center relative group ${showHistoricalFigures
+              ? 'bg-sky-500/20 text-sky-400 border-sky-500/50 shadow-[0_0_15px_rgba(14,165,233,0.3)]'
+              : 'bg-slate-900/80 text-slate-300 border-slate-700/50 hover:text-white hover:border-sky-500/50 hover:bg-slate-800'
+              }`}
+            title="Önemli Tarihsel Kişiler"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+
+            {/* Tooltip */}
+            <span className={`absolute top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white opacity-0 whitespace-nowrap pointer-events-none group-hover:opacity-100 transition-opacity ${historyMode ? 'right-full mr-3' : 'left-full ml-3'}`}>
+              Devrin Önemli Kişileri
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Manual Entry Marker (Preview) */}
@@ -1786,6 +2031,10 @@ const MapComponent: React.FC<MapBlockProps> = ({ selectedYear, onStateClick, onP
         )
       }
 
+      {/* DIAGNOSTIC OVERLAY - Temporary for debugging */}
+      <div className="absolute bottom-24 left-4 z-50 bg-black/80 text-white p-2 rounded text-[10px] font-mono border border-white/20 pointer-events-none">
+        YEAR: {selectedYear} | CITIES: {visibleCities.length} | ANCIENT: {ancientSites.length} | MODE: {historyMode ? 'HIST' : 'MOD'}
+      </div>
     </div >
   );
 };

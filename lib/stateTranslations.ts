@@ -126,11 +126,11 @@ export const PARTIAL_TRANSLATIONS: { keyword: string, tr: string }[] = [
     { keyword: "KARLUK", tr: "Karluklar" },
     { keyword: "OGHUZ", tr: "Oğuz Türkleri" },
     { keyword: "TARTAR", tr: "Tatarlar" },
-    { keyword: "UZBEK", tr: "Özbekler" },
-    { keyword: "KAZAKH", tr: "Kazaklar" },
-    { keyword: "KYRGYZ", tr: "Kırgızlar" },
-    { keyword: "TURKMEN", tr: "Türkmenler" },
-    { keyword: "AZERBAIJAN", tr: "Azerbaycanlılar" }
+    { keyword: "UZBEK", tr: "Özbekistan" },
+    { keyword: "KAZAKH", tr: "Kazakistan" },
+    { keyword: "KYRGYZ", tr: "Kırgızistan" },
+    { keyword: "TURKMEN", tr: "Türkmenistan" },
+    { keyword: "AZERBAIJAN", tr: "Azerbaycan" }
 ];
 
 /**

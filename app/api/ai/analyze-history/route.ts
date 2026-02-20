@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from 'next/server';
 
-const API_KEY = process.env.GEMINI_API_KEY;
+const API_KEY = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
 export async function POST(req: Request) {
     if (!API_KEY) {
@@ -21,8 +21,10 @@ export async function POST(req: Request) {
         });
 
         const tribeContext = extraMetadata?.type === 'turkic_tribe'
-            ? `\n**TURKIC TRIBE CONTEXT:** Bu yerleşim bir **${extraMetadata.tribe}** boyuna (Kol: ${extraMetadata.branch}) aittir. Analizinde bu boyun o bölgedeki tarihi yerleşimini, varsa iskan politikalarını ve kültürel etkisini ön plana çıkar.`
-            : "";
+            ? `\n**TURKIC TRIBE CONTEXT:** Bu yerleşim bir **${extraMetadata.tribe}** boyuna (Ait olduğu Kol: ${extraMetadata.branch}) aittir. Analizinde bu bölgenin sıradan tarihinden ZİYADE, doğrudan bu boyun buradaki iskanını, yaşam tarzını, bölgeye bıraktığı kültürel mirası ve tarihi rolünü detaylıca anlat.`
+            : extraMetadata?.type === 'historical_figure'
+                ? `\n**HISTORICAL FIGURE CONTEXT:** Bu konum, tarihsel şahsiyet **${stateName}** (Unvan: ${extraMetadata?.title || ''}) ile ilişkilidir. Analizinde bu şahsiyetin hayatını, o dönemdeki (${year}) siyasi/kültürel/askeri faaliyetlerini ve bu coğrafyaya olan etkisini detaylandır.`
+                : "";
 
         const locationContext = location ? `Koordinatlar: (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})` : "";
         const districtContext = district ? `İlçe (Kesin Bilgi): ${district}` : "";
@@ -51,8 +53,9 @@ export async function POST(req: Request) {
         2. **ZAMAN BAĞLAMI:** 
            - Eğer yıl 1923 ve sonrası ise: Modern dönem, güncel siyasi/stratejik durum.
            - Eğer yıl 1923 öncesi ise: O dönemin hakim medeniyeti bağlamında kal.
-           - **KÜRESEL BAKIŞ:** Analiz edilen yer Türkiye dışında ise, o bölgenin kendi tarihini anlat. Ancak Türk tarihiyle (Hunlar, Göktürkler, Selçuklu, Osmanlı, vb.) bir teması varsa MUTLAKA belirt.
-        3. **GERÇEKÇİLİK:** O dönemde yerleşim yoksa veya çok küçükse bunu dürüstçe belirt. Nüfus verilerini uydurma.
+           - **KÜRESEL BAKIŞ:** Analiz edilen yer Türkiye dışında ise, o bölgenin kendi tarihini anlat. Ancak Türk tarihiyle bir teması varsa MUTLAKA belirt.
+        3. **KESİN GERÇEKÇİLİK (UYDURMA YASAK):** O dönemde veya bölgede yerleşim yoksa, veya tarihi kaynaklarda adı geçmiyorsa BUNU DÜRÜSTÇE SÖYLE (Örn: "İlgili dönemde burası küçük bir yerleşimdir veya kayıtlarda yer almamaktadır").
+        4. **NÜFUS/DEMOGRAFİ UYDURMAK YASAKTIR:** Nüfus verilerini KESİNLİKLE UYDURMA. Eğer spesifik yıla ait bir Osmanlı Tahrir defteri, Roma nüfus sayımı veya kesin bir akademik kayıt veya iyi bir tahmin YOKSA eksik veriyi uydurarak doldurma. Bilinmeyen yılların nüfusunu JSON'a koyma.
 
         **YANIT FORMATI (KESİN UYULACAK):**
 
@@ -60,7 +63,7 @@ export async function POST(req: Request) {
         **Tarihsel İsim:** ${knownHistoricalName || "[Bulunan İsim]"} (Modern: ${stateName})
         
         Buraya ${year} yılı bağlamında tarihçe, demografik yapı ve önem hakkında ansiklopedik metin gelecek.
-        Dönemin hakimi olan devlet/medeniyet bağlamında anlat.
+        Eğer o yıl için yeterli bilgi/yerleşim yoksa, "Bu dönemde ${stateName} hakkında net bir akademik veri veya büyük bir yerleşim bulunmamaktadır" şeklinde bilgi ver.
         </ANALIZ>
 
         <DEMOGRAFI>
@@ -71,15 +74,14 @@ export async function POST(req: Request) {
           },
           "ethnicity": {
              "Grup A": 60,
-             "Grup B": 30,
-             "Diğer": 10
+             "Grup B": 30
           },
           "religion": {
              "Din A": 70,
              "Din B": 30
           }
         }
-        (Sadece geçerli bir JSON objesi ver. Sayıları number olarak ver (string değil). Asla sayı uydurma, tahmin ise mantıklı bir tahmin yap ve JSON yapısını bozma.)
+        (Sadece geçerli bir JSON objesi ver. Sayıları number olarak ver. EĞER TARİHSEL BİR KAYIT YOKSA, SAYI UYDURMA DİYE UYARMIŞTIM. Verisi olmayan dönemleri yazdırma veya JSON haricinde metin ekleme.)
         </DEMOGRAFI>
 
         <KAYNAKLAR>

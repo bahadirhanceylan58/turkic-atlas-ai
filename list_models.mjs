@@ -7,7 +7,7 @@ let apiKey = "";
 
 try {
     const envContent = fs.readFileSync(envPath, "utf8");
-    const match = envContent.match(/NEXT_PUBLIC_GEMINI_API_KEY=(.*)/);
+    const match = envContent.match(/(?:NEXT_PUBLIC_)?GEMINI_API_KEY=(.*)/);
     if (match && match[1]) {
         apiKey = match[1].trim();
     }

@@ -97,6 +97,7 @@ export default function Home() {
   const [showTradeRoutes, setShowTradeRoutes] = useState(true);
   const [showModernHeatmap, setShowModernHeatmap] = useState(false);
   const [showTurkicTribes, setShowTurkicTribes] = useState(false);
+  const [showHistoricalFigures, setShowHistoricalFigures] = useState(false);
   const [selectedTribe, setSelectedTribe] = useState<string | null>(null);
   const [dynastyInfo, setDynastyInfo] = useState<string | null>(null);
   const [isLoadingDynasty, setIsLoadingDynasty] = useState(false);
@@ -413,8 +414,14 @@ export default function Home() {
       if (place.name) {
         getPlaceNameHistory(place.name)
           .then(history => {
-            setPlaceHistory(history);
-            setCurrentPlaceName(history.find(h => h.startYear <= selectedYear && h.endYear >= selectedYear) || null);
+            if (Array.isArray(history)) {
+              setPlaceHistory(history);
+              setCurrentPlaceName(history.find(h => h.startYear <= selectedYear && h.endYear >= selectedYear) || null);
+            } else {
+              setPlaceHistory([]);
+              setCurrentPlaceName(null);
+              console.warn("AI returned a non-array etymology history", history);
+            }
           })
           .catch(err => console.error("Etymology fetch error:", err));
       }
@@ -452,11 +459,20 @@ export default function Home() {
           if (d) district = d;
         }
 
-        const extraMetadata = (place.type === 'turkic_tribe') ? {
-          type: 'turkic_tribe',
-          tribe: place.tribe,
-          branch: place.branch
-        } : null;
+        let extraMetadata: any = null;
+        if (place.type === 'turkic_tribe') {
+          extraMetadata = {
+            type: 'turkic_tribe',
+            tribe: place.tribe || placeInfo.tribe,
+            branch: place.branch || placeInfo.branch
+          };
+        } else if (place.type === 'historical_figure') {
+          extraMetadata = {
+            type: 'historical_figure',
+            title: place.title || placeInfo.title,
+            civilization: place.civilization || placeInfo.civilization
+          };
+        }
 
         // ... historical name logic ...
         let historicalName: string | undefined;
@@ -622,6 +638,8 @@ export default function Home() {
         onModernHeatmapToggle={() => setShowModernHeatmap(!showModernHeatmap)}
         showTurkicTribes={showTurkicTribes}
         onTurkicTribesToggle={() => setShowTurkicTribes(!showTurkicTribes)}
+        showHistoricalFigures={showHistoricalFigures}
+        onHistoricalFiguresToggle={() => setShowHistoricalFigures(!showHistoricalFigures)}
         selectedTribe={selectedTribe}
         setSelectedTribe={setSelectedTribe}
       />
